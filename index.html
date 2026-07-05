@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#181513" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Aveniq" />
+    <meta name="format-detection" content="telephone=no" />
+    <title>Aveniq Restaurant Ordering</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/styles.css?v=20260703-2" />
+  </head>
+  <body>
+    <section class="account-gateway hidden" id="accountGateway" aria-live="polite">
+      <div class="gateway-brand">
+        <span class="gateway-mark">A</span>
+        <strong>Aveniq</strong>
+        <span>Restaurant ordering, ready in minutes.</span>
+      </div>
+
+      <section class="auth-gateway-card" id="ownerAuthPanel">
+        <p class="eyebrow">Secure platform access</p>
+        <h1 id="ownerAuthTitle">Sign in to Aveniq</h1>
+        <p class="muted">Master administrators and restaurant staff use the same secure login.</p>
+        <form class="auth-form" id="ownerAuthForm">
+          <label class="field">
+            <span>Email address</span>
+            <input id="ownerEmail" type="email" autocomplete="email" required placeholder="owner@restaurant.com" />
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <input id="ownerPassword" type="password" autocomplete="current-password" required minlength="8" placeholder="Your password" />
+          </label>
+          <p class="auth-error hidden" id="ownerAuthError" role="alert"></p>
+          <button class="submit-button" id="ownerAuthSubmit" type="submit">Log in</button>
+        </form>
+      </section>
+
+      <section class="auth-gateway-card invite-gateway-card hidden" id="inviteAuthPanel">
+        <p class="eyebrow">Restaurant invitation</p>
+        <h1 id="inviteAuthTitle">Join your restaurant team</h1>
+        <p class="muted" id="inviteAuthDescription">Create an account using the email address that received this invitation.</p>
+        <form class="auth-form" id="inviteAuthForm">
+          <label class="field"><span>Email address</span><input id="inviteEmail" type="email" autocomplete="email" required placeholder="you@restaurant.com" /></label>
+          <label class="field"><span>Password</span><input id="invitePassword" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters" /></label>
+          <p class="auth-error hidden" id="inviteAuthError" role="alert"></p>
+          <button class="submit-button" id="inviteAuthSubmit" type="submit">Create account and join</button>
+          <button class="ghost-button" id="toggleInviteAuthMode" type="button">I already have an account</button>
+        </form>
+      </section>
+
+      <section class="platform-console hidden" id="platformConsole">
+        <header class="platform-console-header">
+          <div>
+            <p class="eyebrow">Aveniq master console</p>
+            <h1>Restaurants</h1>
+            <p class="muted">Create and open every restaurant from one place.</p>
+          </div>
+          <div class="platform-account">
+            <span id="platformUserEmail">Master</span>
+            <button class="ghost-button" id="platformLogout" type="button">Log out</button>
+          </div>
+        </header>
+
+        <div class="platform-layout">
+          <section class="platform-panel">
+            <p class="eyebrow">New restaurant</p>
+            <h2>Create restaurant</h2>
+            <form class="platform-create-form" id="platformRestaurantForm">
+              <label class="field"><span>Restaurant name</span><input id="platformRestaurantName" required placeholder="Sakura Japanese" /></label>
+              <label class="field"><span>Restaurant type</span><select id="platformRestaurantType"><option>Restaurant</option><option>Cafe</option><option>Bar</option><option>Food truck</option><option>Other</option></select></label>
+              <label class="field"><span>Phone</span><input id="platformRestaurantPhone" type="tel" placeholder="02 9000 0000" /></label>
+              <label class="field"><span>Number of tables</span><input id="platformRestaurantTables" type="number" min="1" max="100" value="10" required /></label>
+              <label class="field full-field"><span>Address</span><input id="platformRestaurantAddress" placeholder="123 King Street, Sydney NSW" /></label>
+              <p class="auth-error hidden full-field" id="platformError" role="alert"></p>
+              <button class="submit-button full-field" id="platformCreateSubmit" type="submit">Create restaurant</button>
+            </form>
+          </section>
+
+          <section class="platform-panel platform-list-panel">
+            <div class="panel-title">
+              <div>
+                <p class="eyebrow">Portfolio</p>
+                <h2>Your restaurants</h2>
+              </div>
+              <button class="ghost-button" id="refreshPlatformRestaurants" type="button">Refresh</button>
+            </div>
+            <div class="platform-restaurant-list" id="platformRestaurantList">
+              <div class="empty-state">Loading restaurants…</div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="onboarding-shell hidden" id="onboardingWizard">
+        <header class="onboarding-header">
+          <div>
+            <p class="eyebrow">Restaurant setup</p>
+            <h1>Let’s get you ready for your first order</h1>
+          </div>
+          <span id="onboardingStepLabel">Step 1 of 5</span>
+        </header>
+        <div class="onboarding-progress" aria-hidden="true"><span id="onboardingProgressBar"></span></div>
+
+        <section class="onboarding-step" data-onboarding-step="1">
+          <p class="eyebrow">Step 1</p>
+          <h2>Create your restaurant</h2>
+          <p class="muted">A few basics first. You can fine-tune these later.</p>
+          <form class="onboarding-form" id="onboardingRestaurantForm">
+            <label class="field"><span>Restaurant name</span><input id="onboardingRestaurantName" required placeholder="Sakura Japanese" /></label>
+            <label class="field"><span>Restaurant type</span><select id="onboardingRestaurantType" required><option value="">Choose a type</option><option>Restaurant</option><option>Cafe</option><option>Bar</option><option>Food truck</option><option>Other</option></select></label>
+            <label class="field"><span>Phone number</span><input id="onboardingPhone" type="tel" required placeholder="02 9000 0000" /></label>
+            <label class="field full-field"><span>Address</span><input id="onboardingAddress" required placeholder="123 King Street, Sydney NSW" /></label>
+            <label class="field full-field"><span>Logo URL <small>optional</small></span><input id="onboardingLogoUrl" type="url" placeholder="https://..." /></label>
+            <button class="submit-button" type="submit">Create restaurant</button>
+          </form>
+        </section>
+
+        <section class="onboarding-step hidden" data-onboarding-step="2">
+          <p class="eyebrow">Step 2</p>
+          <h2>How many tables do you have?</h2>
+          <p class="muted">We’ll create a unique ordering link and QR code for every table.</p>
+          <form class="onboarding-count-form" id="onboardingTablesForm">
+            <label class="field"><span>Number of tables</span><input id="onboardingTableCount" type="number" min="1" max="100" value="10" required /></label>
+            <button class="submit-button" type="submit">Create tables</button>
+          </form>
+        </section>
+
+        <section class="onboarding-step hidden" data-onboarding-step="3">
+          <p class="eyebrow">Step 3</p>
+          <h2>Add your first menu items</h2>
+          <p class="muted">Keep it light for now. Add a few favourites or use our sample menu.</p>
+          <form class="onboarding-menu-form" id="onboardingMenuForm">
+            <label class="field"><span>Category</span><input id="onboardingCategory" required placeholder="Mains" /></label>
+            <label class="field"><span>Item name</span><input id="onboardingItemName" required placeholder="Chicken ramen" /></label>
+            <label class="field"><span>Price</span><input id="onboardingItemPrice" type="number" min="0" step="0.01" required placeholder="18.00" /></label>
+            <label class="field full-field"><span>Description</span><input id="onboardingItemDescription" placeholder="A short, tempting description" /></label>
+            <button class="ghost-button" type="submit">Add item</button>
+          </form>
+          <div class="onboarding-menu-list" id="onboardingMenuList"></div>
+          <div class="onboarding-actions">
+            <button class="ghost-button" id="importSampleMenu" type="button">Import sample menu</button>
+            <button class="submit-button" id="continueFromMenu" type="button" disabled>Review QR codes</button>
+          </div>
+        </section>
+
+        <section class="onboarding-step hidden" data-onboarding-step="4">
+          <p class="eyebrow">Step 4</p>
+          <h2>Your table QR codes are ready</h2>
+          <p class="muted">Each code opens the correct restaurant and table automatically.</p>
+          <div class="onboarding-qr-grid" id="onboardingQrGrid"></div>
+          <div class="onboarding-actions">
+            <button class="ghost-button" id="onboardingDownloadAllQr" type="button">Download all</button>
+            <button class="ghost-button" id="onboardingPrintQr" type="button">Print / PDF</button>
+            <button class="submit-button" id="finishOnboarding" type="button">Finish setup</button>
+          </div>
+        </section>
+
+        <section class="onboarding-step onboarding-success hidden" data-onboarding-step="5">
+          <span class="success-mark">OK</span>
+          <p class="eyebrow">Setup complete</p>
+          <h2>Your restaurant is ready.</h2>
+          <p class="muted">Place a test order now and watch it arrive in your kitchen screen.</p>
+          <div class="onboarding-actions">
+            <a class="ghost-button" id="openCustomerOrdering" href="#">Open Customer Ordering Page</a>
+            <a class="ghost-button" id="openKitchenScreen" href="#">Open Kitchen Screen</a>
+            <a class="submit-button" id="openRestaurantDashboard" href="#">Go to Dashboard</a>
+          </div>
+        </section>
+
+        <p class="auth-error hidden" id="onboardingError" role="alert"></p>
+      </section>
+    </section>
+
+    <header class="app-header">
+      <div class="brand-lockup">
+        <div class="brand-logo" id="brandLogo">TW</div>
+        <div>
+          <p class="eyebrow" id="brandSubtitle">Free QR restaurant ordering</p>
+          <h1 id="restaurantTitle">TableOrder MVP</h1>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span class="status-pill ready" id="openStatus">Open</span>
+        <div class="sync-cluster hidden" id="cloudSyncCluster">
+          <span class="status-pill sync-status" id="cloudSyncStatus">Offline</span>
+          <span class="sync-detail" id="cloudSyncDetail">Not synced yet</span>
+        </div>
+        <button class="ghost-button sound-toggle" id="soundToggle" type="button" aria-label="Toggle kitchen order sound" aria-pressed="false" title="Kitchen order sound is off">Sound Off</button>
+        <button class="ghost-button header-login-button" id="staffLoginButton" type="button">Staff Login</button>
+        <div class="staff-identity hidden" id="staffIdentity">
+          <div>
+            <strong id="staffName">Staff</strong>
+            <span id="staffRole">Role</span>
+          </div>
+          <button class="ghost-button" id="staffLogoutButton" type="button">Log Out</button>
+        </div>
+        <button class="primary-button" id="printBillTop">Print Bill</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Application sections">
+      <button class="tab active" data-view="customer">Customer</button>
+      <button class="tab" data-view="kitchen">Kitchen</button>
+      <button class="tab" data-view="frontdesk">Front Desk</button>
+      <button class="tab" data-view="reports">Reports</button>
+      <button class="tab" data-view="setup">Admin</button>
+    </nav>
+
+    <main>
+      <section id="customer" class="view active-view">
+        <div class="table-strip">
+          <div>
+            <p class="eyebrow">Scanned table</p>
+            <h2 id="customerTableName">Table 6</h2>
+          </div>
+          <select id="tablePicker" aria-label="Select table"></select>
+        </div>
+
+        <section class="customer-order-status hidden" id="customerOrderStatus" aria-live="polite"></section>
+
+        <div class="category-row" id="categoryRow"></div>
+
+        <div class="customer-layout">
+          <section class="menu-grid" id="menuGrid" aria-label="Menu items"></section>
+
+          <aside class="order-panel" aria-label="Current cart">
+            <div class="panel-title">
+              <h2>Cart</h2>
+              <button class="ghost-button" id="clearCart">Clear</button>
+            </div>
+            <div class="cart-list" id="cartList"></div>
+            <label class="field">
+              <span>Order note</span>
+              <textarea id="orderNote" rows="3" placeholder="Less spicy, no coriander, allergy note"></textarea>
+            </label>
+            <div class="totals">
+              <span>Items total</span>
+              <strong id="cartSubtotal">$0.00</strong>
+            </div>
+            <div class="totals compact-total">
+              <span>GST included</span>
+              <strong id="cartGst">$0.00</strong>
+            </div>
+            <div class="totals grand-total">
+              <span>Total</span>
+              <strong id="cartTotal">$0.00</strong>
+            </div>
+            <button class="submit-button" id="submitOrder">Send to Kitchen</button>
+            <div class="order-confirmation hidden" id="orderConfirmation" aria-live="polite"></div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="kitchen" class="view">
+        <div class="toolbar">
+          <div>
+            <p class="eyebrow">Live kitchen docket</p>
+            <h2>Kitchen Orders</h2>
+          </div>
+          <div class="toolbar-actions">
+            <button class="ghost-button" id="clearLocalOrders" type="button">Clear Local</button>
+            <button class="primary-button" id="printKitchen">Print New</button>
+          </div>
+        </div>
+        <div class="kitchen-alert hidden" id="kitchenAlert" role="status" aria-live="polite"></div>
+        <div class="order-board" id="kitchenBoard"></div>
+      </section>
+
+      <section id="frontdesk" class="view">
+        <div class="frontdesk-layout">
+          <aside class="table-list" id="frontTableList" aria-label="Open tables"></aside>
+          <section class="invoice-panel" id="invoicePanel" aria-label="Invoice"></section>
+        </div>
+      </section>
+
+      <section id="reports" class="view">
+        <div class="toolbar">
+          <div>
+            <p class="eyebrow">Daily performance</p>
+            <h2>Reports</h2>
+          </div>
+          <button class="primary-button" id="printReport">Print Report</button>
+        </div>
+        <div class="report-grid" id="reportMetrics"></div>
+        <div class="report-layout">
+          <section class="setup-panel">
+            <div class="panel-title">
+              <h2>Popular Items</h2>
+            </div>
+            <div id="popularItems"></div>
+          </section>
+          <section class="setup-panel">
+            <div class="panel-title">
+              <h2>Order History</h2>
+            </div>
+            <div id="orderHistory"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="setup" class="view">
+        <div class="setup-grid">
+          <section class="setup-panel wide-panel database-panel">
+            <div class="panel-title">
+              <div>
+                <p class="eyebrow">Cloud database</p>
+                <h2>Supabase</h2>
+              </div>
+              <button class="ghost-button" id="checkDatabase" type="button">Check Connection</button>
+            </div>
+            <div class="database-status" id="databaseStatus">
+              <span class="status-dot"></span>
+              <div>
+                <strong>Not checked</strong>
+                <p class="muted">Local storage fallback is active.</p>
+              </div>
+            </div>
+            <div class="database-actions">
+              <button class="primary-button" id="importDashboardSampleMenu" type="button">Import Sample Menu</button>
+              <button class="primary-button" id="uploadCloudMenu" type="button">Upload Current Menu</button>
+              <button class="ghost-button" id="loadCloudData" type="button">Load Cloud Data</button>
+            </div>
+          </section>
+
+          <section class="setup-panel wide-panel team-panel" id="teamManagementPanel">
+            <div class="panel-title">
+              <div>
+                <p class="eyebrow">Access and roles</p>
+                <h2>Restaurant Team</h2>
+                <p class="muted">Invite each person with only the access they need.</p>
+              </div>
+              <button class="ghost-button" id="refreshRestaurantTeam" type="button">Refresh</button>
+            </div>
+            <form class="team-invite-form" id="restaurantInviteForm">
+              <label class="field"><span>Email address</span><input id="restaurantInviteEmail" type="email" required placeholder="staff@restaurant.com" /></label>
+              <label class="field"><span>Role</span><select id="restaurantInviteRole"><option value="staff">All-round Staff</option><option value="manager">Manager</option><option value="kitchen">Kitchen</option><option value="cashier">Cashier</option><option value="owner">Owner</option></select></label>
+              <button class="primary-button" id="createRestaurantInvite" type="submit">Create invite link</button>
+            </form>
+            <p class="auth-error hidden" id="restaurantTeamError" role="alert"></p>
+            <div class="team-columns">
+              <div><h3>Active team</h3><div class="team-list" id="restaurantTeamList"><div class="empty-state">Loading team…</div></div></div>
+              <div><h3>Pending invites</h3><div class="team-list" id="restaurantInviteList"><div class="empty-state">No pending invites.</div></div></div>
+            </div>
+          </section>
+
+          <section class="setup-panel">
+            <div class="panel-title">
+              <h2>Tables</h2>
+              <div class="toolbar-actions">
+                <button class="ghost-button" id="downloadAllQr" type="button">Download All</button>
+                <button class="ghost-button" id="downloadQr" type="button">Print / PDF</button>
+              </div>
+            </div>
+            <div class="qr-sheet" id="qrSheet"></div>
+          </section>
+
+          <section class="setup-panel">
+            <div class="panel-title">
+              <div>
+                <p class="eyebrow">Restaurant admin</p>
+                <h2>Table Manager</h2>
+              </div>
+            </div>
+            <form class="compact-form" id="tableForm">
+              <label class="field">
+                <span>Table name</span>
+                <input id="tableName" required placeholder="Table 9 or Patio 2" />
+              </label>
+              <button class="submit-button" type="submit">Add Table</button>
+            </form>
+            <div class="table-admin-list" id="tableAdminList"></div>
+          </section>
+
+          <section class="setup-panel">
+            <div class="panel-title">
+              <h2>Menu Status</h2>
+              <button class="ghost-button" id="resetDemo">Reset Demo</button>
+            </div>
+            <div id="menuStatus"></div>
+          </section>
+
+          <section class="setup-panel wide-panel">
+            <div class="panel-title">
+              <div>
+                <p class="eyebrow">Restaurant admin</p>
+                <h2>Restaurant Profile</h2>
+              </div>
+            </div>
+            <form class="menu-form" id="profileForm">
+              <label class="field">
+                <span>Restaurant name</span>
+                <input id="restaurantName" required placeholder="Golden Wok" />
+              </label>
+              <label class="field">
+                <span>Short subtitle</span>
+                <input id="restaurantSubtitle" placeholder="Free QR restaurant ordering" />
+              </label>
+              <label class="field">
+                <span>Phone</span>
+                <input id="restaurantPhone" placeholder="02 9000 0000" />
+              </label>
+              <label class="field">
+                <span>ABN / Tax ID</span>
+                <input id="restaurantTaxId" placeholder="00 000 000 000" />
+              </label>
+              <label class="field full-field">
+                <span>Address</span>
+                <input id="restaurantAddress" placeholder="123 King Street, Sydney NSW" />
+              </label>
+              <label class="field">
+                <span>GST / Tax rate</span>
+                <input id="restaurantTaxRate" required min="0" max="30" step="0.1" type="number" />
+              </label>
+              <label class="field">
+                <span>Ordering status</span>
+                <select id="restaurantIsOpen">
+                  <option value="open">Open</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </label>
+              <label class="field full-field">
+                <span>Logo</span>
+                <input id="restaurantLogo" type="file" accept="image/*" />
+              </label>
+              <div class="form-actions">
+                <button class="submit-button" type="submit">Save Profile</button>
+                <button class="ghost-button" id="clearLogo" type="button">Remove Logo</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="setup-panel wide-panel">
+            <div class="panel-title">
+              <div>
+                <p class="eyebrow">Template system</p>
+                <h2>Menu Theme</h2>
+              </div>
+            </div>
+            <form class="menu-form" id="themeForm">
+              <label class="field">
+                <span>Theme preset</span>
+                <select id="themePreset"></select>
+              </label>
+              <label class="field">
+                <span>Primary color</span>
+                <input id="primaryColor" type="color" />
+              </label>
+              <label class="field">
+                <span>Menu layout</span>
+                <select id="menuLayout">
+                  <option value="grid">Photo grid</option>
+                  <option value="list">Compact list</option>
+                  <option value="dense">Dense operations</option>
+                </select>
+              </label>
+              <label class="field toggle-field">
+                <span>Show photos</span>
+                <input id="showPhotos" type="checkbox" />
+              </label>
+              <div class="theme-preview full-field" id="themePreview"></div>
+              <div class="form-actions">
+                <button class="submit-button" type="submit">Save Theme</button>
+                <button class="ghost-button" id="applyPresetColor" type="button">Use Preset Color</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="setup-panel wide-panel">
+            <div class="panel-title">
+              <div>
+                <p class="eyebrow">Restaurant admin</p>
+                <h2>Add Menu Item</h2>
+              </div>
+            </div>
+            <form class="menu-form" id="menuForm">
+              <label class="field">
+                <span>Dish name</span>
+                <input id="dishName" required placeholder="Salt Pepper Squid" />
+              </label>
+              <label class="field">
+                <span>Category</span>
+                <input id="dishCategory" required list="categoryOptions" placeholder="Mains" />
+                <datalist id="categoryOptions"></datalist>
+              </label>
+              <label class="field">
+                <span>Price</span>
+                <input id="dishPrice" required min="0" step="0.1" type="number" placeholder="18.80" />
+              </label>
+              <label class="field">
+                <span>Tags</span>
+                <input id="dishTags" placeholder="Popular, Spicy, Vegetarian" />
+              </label>
+              <label class="field">
+                <span>Option template</span>
+                <select id="dishOptionTemplate"></select>
+              </label>
+              <label class="field full-field">
+                <span>Description</span>
+                <textarea id="dishDescription" rows="3" placeholder="Short menu description"></textarea>
+              </label>
+              <label class="field full-field">
+                <span>Photo</span>
+                <input id="dishPhoto" type="file" accept="image/*" />
+              </label>
+              <label class="field full-field">
+                <span>Photo URL</span>
+                <input id="dishPhotoUrl" type="url" placeholder="https://images.unsplash.com/..." />
+              </label>
+              <div class="sample-photo-row full-field" id="samplePhotoRow" aria-label="Sample photo URLs"></div>
+              <div class="form-actions">
+                <button class="submit-button" type="submit">Add Dish</button>
+                <button class="ghost-button" id="clearMenuForm" type="button">Clear</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="setup-panel wide-panel">
+            <div class="panel-title">
+              <div>
+                <p class="eyebrow">CSV / spreadsheet import</p>
+                <h2>Bulk Import Menu</h2>
+              </div>
+              <button class="ghost-button" id="downloadSampleCsv" type="button">Sample CSV</button>
+            </div>
+            <div class="import-grid">
+              <label class="field">
+                <span>CSV file</span>
+                <input id="csvFile" type="file" accept=".csv,text/csv" />
+              </label>
+              <label class="field full-field">
+                <span>Paste CSV</span>
+                <textarea id="csvText" rows="7" placeholder="name,category,price,description,tags,optionTemplate&#10;Chicken Rice,Mains,15.8,House chicken rice,Popular,spiceAddons"></textarea>
+              </label>
+              <div class="form-actions">
+                <button class="submit-button" id="previewCsv" type="button">Preview Import</button>
+                <button class="ghost-button" id="importCsv" type="button" disabled>Import Preview</button>
+                <button class="ghost-button" id="clearCsv" type="button">Clear</button>
+              </div>
+            </div>
+            <div class="import-preview" id="importPreview"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <div class="modal-backdrop hidden" id="optionModal" role="dialog" aria-modal="true" aria-labelledby="optionTitle">
+      <section class="option-modal">
+        <div class="panel-title">
+          <div>
+            <p class="eyebrow">Choose options</p>
+            <h2 id="optionTitle">Menu Item</h2>
+          </div>
+          <strong id="optionBasePrice">$0.00</strong>
+        </div>
+        <div class="option-groups" id="optionGroups"></div>
+        <div class="option-total">
+          <span>Item total</span>
+          <strong id="optionTotal">$0.00</strong>
+        </div>
+        <div class="form-actions">
+          <button class="submit-button" id="confirmOptions" type="button">Add to Cart</button>
+          <button class="ghost-button" id="cancelOptions" type="button">Cancel</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop hidden" id="staffAuthModal" role="dialog" aria-modal="true" aria-labelledby="staffAuthTitle">
+      <section class="staff-auth-modal">
+        <div class="auth-brand">
+          <div class="brand-logo" id="authBrandLogo">SS</div>
+          <div>
+            <p class="eyebrow">Secure staff access</p>
+            <h2 id="staffAuthTitle">Employee Login</h2>
+          </div>
+        </div>
+        <form id="staffLoginForm" class="auth-form">
+          <label class="field">
+            <span>Email</span>
+            <input id="staffEmail" type="email" autocomplete="username" required placeholder="you@restaurant.com" autocapitalize="none" spellcheck="false" />
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <input id="staffPassword" type="password" autocomplete="current-password" required minlength="8" />
+          </label>
+          <p class="auth-error hidden" id="staffAuthError" role="alert"></p>
+          <div class="form-actions">
+            <button class="submit-button" id="staffLoginSubmit" type="submit">Log In</button>
+            <button class="ghost-button" id="cancelStaffLogin" type="button">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <template id="printTemplate">
+      <section class="print-page"></section>
+    </template>
+
+    <script src="/mobile-shell.js?v=20260703-1"></script>
+    <script src="/supabase-config.js?v=20260703-1"></script>
+    <script src="/supabase-client.js?v=20260705-1"></script>
+    <script src="/app.js?v=20260705-2"></script>
+  </body>
+</html>

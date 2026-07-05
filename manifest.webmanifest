@@ -1,0 +1,14 @@
+{
+  "id": "/",
+  "name": "Aveniq Restaurant Ordering",
+  "short_name": "Aveniq",
+  "description": "Multi-restaurant QR ordering by Aveniq.",
+  "lang": "en-AU",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#181513",
+  "theme_color": "#181513",
+  "categories": ["food", "business"]
+}

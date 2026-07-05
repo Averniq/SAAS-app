@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.netlify/
+.supabase/
+supabase/.temp/
+preview-server*.log
+*.log
