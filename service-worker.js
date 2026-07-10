@@ -1,5 +1,5 @@
-const SHELL_CACHE = "aveniq-shell-v12";
-const RUNTIME_CACHE = "aveniq-runtime-v12";
+const SHELL_CACHE = "aveniq-shell-v14";
+const RUNTIME_CACHE = "aveniq-runtime-v14";
 const APP_SHELL = [
   "/",
   "/index.html",

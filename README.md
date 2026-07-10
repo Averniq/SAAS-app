@@ -12,8 +12,15 @@ Create a new Supabase project specifically for Aveniq. Never use the Sake Street
 4. Run `supabase/migrations/004_role_hardening.sql`.
 5. Run `supabase/migrations/005_all_round_staff.sql`.
 6. Run `supabase/migrations/006_function_permission_hardening.sql`.
-6. Copy the new project's URL and publishable key into `supabase-config.js`.
-7. Keep `restaurantSlug` empty; restaurants are created from the Master console.
+7. Run `supabase/migrations/007_explicit_data_api_grants.sql`.
+8. Run `supabase/migrations/008_authoritative_option_pricing.sql`.
+9. Run `supabase/migrations/009_reporting_layer.sql`.
+10. Run `supabase/migrations/010_advisor_index_rls_tuning.sql`.
+11. Run `supabase/migrations/011_consolidate_rls_policies.sql`.
+12. Copy the new project's URL and publishable key into `supabase-config.js`.
+13. Keep `restaurantSlug` empty; restaurants are created from the Master console.
+
+For the existing live project, do not re-run migrations already applied. Apply new migrations in order. After `008`, verify a real option-priced order before applying `009` and opening Reports. After `009`, run `supabase/REPORTING_VERIFICATION.sql`. After any security or RLS migration, run `pnpm run test:authorization` with the dedicated role-test environment variables described in `tests/AUTHORIZATION_TESTS.md`.
 
 ## Restaurant accounts
 

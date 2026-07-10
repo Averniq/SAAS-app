@@ -10,7 +10,7 @@
     <meta name="format-detection" content="telephone=no" />
     <title>Aveniq Restaurant Ordering</title>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="/styles.css?v=20260703-2" />
+    <link rel="stylesheet" href="/styles.css?v=20260710-1" />
   </head>
   <body>
     <section class="account-gateway hidden" id="accountGateway" aria-live="polite">
@@ -279,26 +279,43 @@
       <section id="reports" class="view">
         <div class="toolbar">
           <div>
-            <p class="eyebrow">Daily performance</p>
+            <p class="eyebrow">Restaurant performance</p>
             <h2>Reports</h2>
           </div>
-          <button class="primary-button" id="printReport">Print Report</button>
+          <div class="toolbar-actions">
+            <button class="ghost-button" id="exportReportCsv" type="button">Export CSV</button>
+            <button class="primary-button" id="printReport" type="button">Print Report</button>
+          </div>
         </div>
+
+        <section class="report-controls" aria-label="Report date range">
+          <div class="report-range-presets" id="reportRangePresets">
+            <button class="report-filter active" type="button" data-report-range="today">Today</button>
+            <button class="report-filter" type="button" data-report-range="yesterday">Yesterday</button>
+            <button class="report-filter" type="button" data-report-range="last7">Last 7 Days</button>
+            <button class="report-filter" type="button" data-report-range="month">This Month</button>
+            <button class="report-filter" type="button" data-report-range="custom">Custom Range</button>
+          </div>
+          <form class="report-custom-range hidden" id="reportCustomRange">
+            <label class="field"><span>From</span><input id="reportFrom" type="date" required /></label>
+            <label class="field"><span>To</span><input id="reportTo" type="date" required /></label>
+            <button class="ghost-button" type="submit">Apply</button>
+          </form>
+          <p class="report-range-label" id="reportRangeLabel"></p>
+        </section>
+
         <div class="report-grid" id="reportMetrics"></div>
-        <div class="report-layout">
-          <section class="setup-panel">
-            <div class="panel-title">
-              <h2>Popular Items</h2>
-            </div>
-            <div id="popularItems"></div>
-          </section>
-          <section class="setup-panel">
-            <div class="panel-title">
-              <h2>Order History</h2>
-            </div>
-            <div id="orderHistory"></div>
-          </section>
+
+        <div class="report-tabs" id="reportTabs" role="tablist" aria-label="Report type">
+          <button class="report-tab active" type="button" role="tab" aria-selected="true" data-report-tab="sales">Sales</button>
+          <button class="report-tab" type="button" role="tab" aria-selected="false" data-report-tab="menu">Menu</button>
+          <button class="report-tab" type="button" role="tab" aria-selected="false" data-report-tab="tables">Tables</button>
+          <button class="report-tab" type="button" role="tab" aria-selected="false" data-report-tab="hourly">Hourly</button>
+          <button class="report-tab" type="button" role="tab" aria-selected="false" data-report-tab="orders">Orders</button>
         </div>
+
+        <div class="report-status" id="reportStatus" role="status" aria-live="polite"></div>
+        <section class="report-workspace setup-panel" id="reportWorkspace" aria-live="polite"></section>
       </section>
 
       <section id="setup" class="view">
@@ -600,7 +617,7 @@
 
     <script src="/mobile-shell.js?v=20260703-1"></script>
     <script src="/supabase-config.js?v=20260703-1"></script>
-    <script src="/supabase-client.js?v=20260705-1"></script>
-    <script src="/app.js?v=20260705-2"></script>
+    <script src="/supabase-client.js?v=20260710-1"></script>
+    <script src="/app.js?v=20260710-1"></script>
   </body>
 </html>

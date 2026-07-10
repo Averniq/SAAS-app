@@ -195,6 +195,15 @@ const optionTemplates = {
   }
 };
 
+function optionConfigForTemplate(templateId) {
+  const groups = optionTemplates[templateId || "none"]?.groups || [];
+  return groups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    choices: group.choices.map((choice) => ({ ...choice }))
+  }));
+}
+
 function defaultMenuItem(id, category, name, price, description = "", tags = [], photoIndex = 1) {
   return {
     id: `item_${id}`,
@@ -315,6 +324,14 @@ let highlightedKitchenOrderIds = new Set();
 let customerStatusTimer = null;
 let customerStatusBusy = false;
 let customerStatusError = "";
+let activeReportTab = "sales";
+let reportRangePreset = "today";
+let reportRange = null;
+let reportDashboard = null;
+let reportData = {};
+let reportLoading = false;
+let reportError = "";
+let reportRequestId = 0;
 
 const CUSTOMER_ORDER_STEPS = [
   { status: "New", label: "Received" },
@@ -542,7 +559,7 @@ function itemSoldOut(item) {
 }
 
 function modifierGroupsForItem(item) {
-  return optionTemplates[item.optionTemplate || "none"]?.groups || [];
+  return Array.isArray(item.optionConfig) ? item.optionConfig : optionTemplates[item.optionTemplate || "none"]?.groups || [];
 }
 
 function optionTemplateLabel(templateId) {
@@ -1298,6 +1315,9 @@ function setView(view, options = {}) {
   if (view === "setup" && staffUser && ["owner", "manager"].includes(staffUser.role)) {
     loadRestaurantTeam();
   }
+  if (view === "reports" && staffUser && ["owner", "manager"].includes(staffUser.role)) {
+    window.setTimeout(() => loadReports({ refreshDashboard: true }), 0);
+  }
   if (staffUser && options.updateUrl !== false && STAFF_VIEW_ROLES[view]) {
     const routeName = view === "setup" ? "dashboard" : view;
     window.history.pushState({}, "", `/dashboard/${encodeURIComponent(staffUser.restaurantSlug || restaurant().slug)}/${routeName}`);
@@ -1903,85 +1923,275 @@ function renderInvoice() {
   document.getElementById("markPaid").addEventListener("click", () => markOrdersPaid(orders));
 }
 
-function reportOrders() {
-  return state.orders.filter((order) => order.status !== "Cancelled" && isToday(order.closedAt || order.servedAt || order.createdAt));
+const REPORT_TAB_LABELS = { sales: "Sales", menu: "Menu", tables: "Tables", hourly: "Hourly", orders: "Orders" };
+const REPORT_TAB_LOADERS = {
+  sales: "loadSalesReport",
+  menu: "loadMenuReport",
+  tables: "loadTableReport",
+  hourly: "loadHourlyReport",
+  orders: "loadOrderReport"
+};
+
+function shiftIsoDate(value, days) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
-function paidReportOrders() {
-  return reportOrders().filter((order) => order.status === "Paid");
+function restaurantToday() {
+  if (reportDashboard?.today) return reportDashboard.today;
+  const timezone = restaurant().timezone || "Australia/Sydney";
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
 }
 
-function popularItemsForToday() {
-  const totals = new Map();
+function rangeForReportPreset(preset) {
+  const today = restaurantToday();
+  if (preset === "yesterday") {
+    const yesterday = shiftIsoDate(today, -1);
+    return { from: yesterday, to: yesterday };
+  }
+  if (preset === "last7") return { from: shiftIsoDate(today, -6), to: today };
+  if (preset === "month") return { from: `${today.slice(0, 7)}-01`, to: today };
+  return { from: today, to: today };
+}
 
-  reportOrders().forEach((order) => {
-    order.items.forEach((item) => {
-      const existing = totals.get(item.name) || { name: item.name, quantity: 0, revenue: 0 };
-      existing.quantity += item.quantity;
-      existing.revenue += item.price * item.quantity;
-      totals.set(item.name, existing);
-    });
+function formatReportPeriod(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
+}
+
+function currentReportRange() {
+  return reportRange || rangeForReportPreset(reportRangePreset);
+}
+
+function reportRangeText() {
+  const range = currentReportRange();
+  return range.from === range.to ? formatReportPeriod(range.from) : `${formatReportPeriod(range.from)} – ${formatReportPeriod(range.to)}`;
+}
+
+function reportTable(headers, rows) {
+  if (!rows?.length) return `<div class="empty-state">No report data for this period.</div>`;
+  return `
+    <div class="report-table-wrap">
+      <table class="report-data-table">
+        <thead><tr>${headers.map((header) => `<th>${escapeHtml(header.label)}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map((row) => `<tr>${headers.map((header) => `<td>${header.format ? header.format(row[header.key], row) : escapeHtml(row[header.key] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderSalesLineChart(rows) {
+  if (!rows?.length || !rows.some((row) => Number(row.sales) > 0)) return `<div class="empty-state report-chart-empty">No completed sales in this period.</div>`;
+  const values = rows.map((row) => Number(row.sales) || 0);
+  const maximum = Math.max(...values, 1);
+  const width = 760;
+  const height = 250;
+  const left = 54;
+  const top = 20;
+  const chartWidth = width - left - 24;
+  const chartHeight = height - top - 42;
+  const points = values.map((value, index) => {
+    const x = left + (values.length === 1 ? chartWidth / 2 : (index / (values.length - 1)) * chartWidth);
+    const y = top + chartHeight - (value / maximum) * chartHeight;
+    return { x, y, value, label: rows[index].period_start };
   });
+  const polyline = points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+  const area = `${left},${top + chartHeight} ${polyline} ${left + chartWidth},${top + chartHeight}`;
+  return `
+    <div class="report-chart" role="img" aria-label="Sales trend from ${escapeHtml(reportRangeText())}">
+      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+        <line class="chart-axis" x1="${left}" y1="${top + chartHeight}" x2="${left + chartWidth}" y2="${top + chartHeight}"></line>
+        <line class="chart-grid" x1="${left}" y1="${top}" x2="${left + chartWidth}" y2="${top}"></line>
+        <line class="chart-grid" x1="${left}" y1="${top + chartHeight / 2}" x2="${left + chartWidth}" y2="${top + chartHeight / 2}"></line>
+        <polygon class="chart-area" points="${area}"></polygon>
+        <polyline class="chart-line" points="${polyline}"></polyline>
+        ${points.map((point) => `<circle class="chart-point" cx="${point.x}" cy="${point.y}" r="4"><title>${escapeHtml(formatReportPeriod(point.label))}: ${money(point.value)}</title></circle>`).join("")}
+        <text class="chart-label" x="4" y="${top + 6}">${escapeHtml(money(maximum))}</text>
+        <text class="chart-label" x="4" y="${top + chartHeight + 4}">$0</text>
+      </svg>
+      <div class="chart-caption"><span>${escapeHtml(formatReportPeriod(rows[0].period_start))}</span><span>${escapeHtml(formatReportPeriod(rows.at(-1).period_start))}</span></div>
+    </div>`;
+}
 
-  return [...totals.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 8);
+function reportBars(rows, labelKey, valueKey, formatValue = (value) => value) {
+  if (!rows?.length) return `<div class="empty-state">No report data for this period.</div>`;
+  const maximum = Math.max(...rows.map((row) => Number(row[valueKey]) || 0), 1);
+  return `<div class="report-bars">${rows.map((row) => {
+    const width = Math.max(0, ((Number(row[valueKey]) || 0) / maximum) * 100);
+    return `<div class="report-bar-row">
+      <div class="report-bar-label"><span>${escapeHtml(row[labelKey])}</span><strong>${escapeHtml(formatValue(row[valueKey]))}</strong></div>
+      <div class="report-bar-track"><span style="width:${width.toFixed(2)}%"></span></div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function renderSalesReport(data) {
+  const rows = data?.rows || [];
+  const summary = data?.summary || {};
+  return `
+    <div class="report-section-heading"><div><p class="eyebrow">Completed orders</p><h3>Sales trend</h3></div><span class="report-chip">${escapeHtml(data?.granularity || "day")}</span></div>
+    <div class="report-summary-strip">
+      <div><span>Sales</span><strong>${money(summary.sales || 0)}</strong></div>
+      <div><span>Orders</span><strong>${Number(summary.order_count) || 0}</strong></div>
+      <div><span>Average order</span><strong>${money(summary.average_order_value || 0)}</strong></div>
+    </div>
+    ${renderSalesLineChart(rows)}
+    ${reportTable([
+      { label: "Period", key: "period_start", format: (value) => escapeHtml(formatReportPeriod(value)) },
+      { label: "Sales", key: "sales", format: money },
+      { label: "Orders", key: "order_count" },
+      { label: "Average order", key: "average_order_value", format: money }
+    ], rows)}`;
+}
+
+function renderMenuReport(data) {
+  const top = data?.top_items || [];
+  const lowest = data?.lowest_items || [];
+  const categories = data?.categories || [];
+  return `
+    <div class="report-section-heading"><div><p class="eyebrow">What customers choose</p><h3>Menu performance</h3></div></div>
+    <div class="report-split">
+      <section><h4>Best-selling items</h4>${reportTable([
+        { label: "Item", key: "item_name" }, { label: "Sold", key: "quantity" }, { label: "Revenue", key: "revenue", format: money }
+      ], top)}</section>
+      <section><h4>Lowest-selling items</h4>${reportTable([
+        { label: "Item", key: "item_name" }, { label: "Sold", key: "quantity" }, { label: "Revenue", key: "revenue", format: money }
+      ], lowest)}</section>
+    </div>
+    <section class="report-subsection"><h4>Revenue by category</h4>
+      ${reportBars(categories, "category_name", "revenue", money)}
+      ${reportTable([{ label: "Category", key: "category_name" }, { label: "Items sold", key: "quantity" }, { label: "Revenue", key: "revenue", format: money }], categories)}
+    </section>`;
+}
+
+function renderTableReport(data) {
+  const rows = data?.rows || [];
+  return `
+    <div class="report-section-heading"><div><p class="eyebrow">Where guests spend</p><h3>Table performance</h3></div></div>
+    ${reportBars(rows, "table_name", "sales", money)}
+    ${reportTable([
+      { label: "Table", key: "table_name" }, { label: "Sales", key: "sales", format: money },
+      { label: "Orders", key: "order_count" }, { label: "Average spend", key: "average_spend", format: money }
+    ], rows)}`;
+}
+
+function renderHourlyReport(data) {
+  const rows = (data?.rows || []).map((row) => ({ ...row, hour_label: `${String(row.hour).padStart(2, "0")}:00` }));
+  return `
+    <div class="report-section-heading"><div><p class="eyebrow">When orders arrive</p><h3>Hourly demand</h3></div></div>
+    <div class="hourly-chart-wrap"><div class="hourly-chart">${rows.map((row) => {
+      const maximum = Math.max(...rows.map((entry) => Number(entry.order_count) || 0), 1);
+      const height = ((Number(row.order_count) || 0) / maximum) * 100;
+      return `<div class="hour-column" title="${escapeHtml(row.hour_label)}: ${Number(row.order_count) || 0} orders, ${money(row.sales)}">
+        <span class="hour-value">${Number(row.order_count) || 0}</span><div><i style="height:${height.toFixed(2)}%"></i></div><small>${String(row.hour).padStart(2, "0")}</small>
+      </div>`;
+    }).join("")}</div></div>
+    ${reportTable([
+      { label: "Hour", key: "hour_label" }, { label: "Orders", key: "order_count" }, { label: "Sales", key: "sales", format: money }
+    ], rows)}`;
+}
+
+function renderOrderReport(data) {
+  return `
+    <div class="report-section-heading"><div><p class="eyebrow">Order outcomes</p><h3>Order summary</h3></div></div>
+    <div class="order-report-grid">
+      <article class="metric-card"><p class="eyebrow">Completed orders</p><strong>${Number(data?.completed_orders) || 0}</strong></article>
+      <article class="metric-card"><p class="eyebrow">Cancelled orders</p><strong>${Number(data?.cancelled_orders) || 0}</strong></article>
+      <article class="metric-card"><p class="eyebrow">Average preparation</p><strong>${data?.average_preparation_minutes == null ? "No data" : `${Number(data.average_preparation_minutes).toFixed(1)} min`}</strong></article>
+      <article class="metric-card"><p class="eyebrow">Average order</p><strong>${money(data?.average_order_value || 0)}</strong></article>
+    </div>
+    ${reportTable([
+      { label: "Completed", key: "completed_orders" }, { label: "Cancelled", key: "cancelled_orders" },
+      { label: "Average preparation", key: "average_preparation_minutes", format: (value) => value == null ? "No data" : `${Number(value).toFixed(1)} min` },
+      { label: "Average order", key: "average_order_value", format: money },
+      { label: "Completed sales", key: "completed_sales", format: money }
+    ], [data || {}])}`;
+}
+
+function renderReportWorkspace() {
+  const workspace = document.getElementById("reportWorkspace");
+  if (!workspace) return;
+  if (reportLoading && !reportData[activeReportTab]) {
+    workspace.innerHTML = `<div class="report-loading"><span></span><p>Loading ${escapeHtml(REPORT_TAB_LABELS[activeReportTab])} report…</p></div>`;
+    return;
+  }
+  if (reportError && !reportData[activeReportTab]) {
+    workspace.innerHTML = `<div class="empty-state"><strong>Report unavailable</strong><p>${escapeHtml(reportError)}</p><button class="ghost-button" type="button" id="retryReports">Try again</button></div>`;
+    document.getElementById("retryReports")?.addEventListener("click", () => loadReports({ refreshDashboard: true }));
+    return;
+  }
+  const renderers = { sales: renderSalesReport, menu: renderMenuReport, tables: renderTableReport, hourly: renderHourlyReport, orders: renderOrderReport };
+  workspace.innerHTML = renderers[activeReportTab](reportData[activeReportTab]);
 }
 
 function renderReports() {
-  const orders = reportOrders();
-  const paidOrders = paidReportOrders();
-  const grossSales = paidOrders.reduce((sum, order) => sum + orderTotal(order), 0);
-  const tax = paidOrders.reduce((sum, order) => sum + orderTax(order), 0);
-  const openValue = orders.filter((order) => order.status !== "Paid" && order.status !== "Cancelled").reduce((sum, order) => sum + orderTotal(order), 0);
-  const itemCount = orders.reduce((sum, order) => sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0);
+  const metrics = document.getElementById("reportMetrics");
+  if (!metrics) return;
+  const dashboard = reportDashboard || {};
+  metrics.innerHTML = [
+    ["Today's Sales", reportDashboard ? money(dashboard.today_sales || 0) : "—"],
+    ["Orders Today", reportDashboard ? Number(dashboard.orders_today) || 0 : "—"],
+    ["Average Order", reportDashboard ? money(dashboard.average_order_value || 0) : "—"],
+    ["Active Tables", reportDashboard ? Number(dashboard.active_tables) || 0 : "—"],
+    ["Pending Orders", reportDashboard ? Number(dashboard.pending_orders) || 0 : "—"]
+  ].map(([label, value]) => `<article class="metric-card"><p class="eyebrow">${label}</p><strong>${value}</strong></article>`).join("");
 
-  document.getElementById("reportMetrics").innerHTML = [
-    ["Paid sales", money(grossSales)],
-    ["Paid orders", paidOrders.length],
-    ["Items sold", itemCount],
-    ["GST included", money(tax)],
-    ["Open value", money(openValue)],
-    ["Total orders", orders.length]
-  ]
-    .map(
-      ([label, value]) => `
-        <article class="metric-card">
-          <p class="eyebrow">${label}</p>
-          <strong>${value}</strong>
-        </article>
-      `
-    )
-    .join("");
+  document.querySelectorAll("[data-report-range]").forEach((button) => button.classList.toggle("active", button.dataset.reportRange === reportRangePreset));
+  document.querySelectorAll("[data-report-tab]").forEach((button) => {
+    const active = button.dataset.reportTab === activeReportTab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  document.getElementById("reportCustomRange")?.classList.toggle("hidden", reportRangePreset !== "custom");
+  const range = currentReportRange();
+  if (document.activeElement?.id !== "reportFrom") document.getElementById("reportFrom").value = range.from;
+  if (document.activeElement?.id !== "reportTo") document.getElementById("reportTo").value = range.to;
+  document.getElementById("reportRangeLabel").textContent = reportRangeText();
+  const status = document.getElementById("reportStatus");
+  status.className = `report-status${reportError ? " error" : reportLoading ? " loading" : ""}`;
+  status.textContent = reportError || (reportLoading ? "Refreshing report…" : reportDashboard ? `Updated for ${restaurant().name}` : "Open Reports to load live data.");
+  renderReportWorkspace();
+}
 
-  const popular = popularItemsForToday();
-  document.getElementById("popularItems").innerHTML = popular.length
-    ? popular
-        .map(
-          (item) => `
-            <div class="line-row">
-              <span>${escapeHtml(item.name)}<p class="muted">${item.quantity} sold</p></span>
-              <strong>${money(item.revenue)}</strong>
-            </div>
-          `
-        )
-        .join("")
-    : `<div class="empty-state">No item sales today yet.</div>`;
-
-  document.getElementById("orderHistory").innerHTML = orders.length
-    ? orders
-        .map((order) => {
-          const table = allTables().find((entry) => entry.id === order.tableId);
-          return `
-            <div class="history-row">
-              <div>
-                <strong>#${order.number} - ${escapeHtml(table?.name || "Table")}</strong>
-                <p class="muted">${escapeHtml(order.status)} - ${dateLabel(order.closedAt || order.servedAt || order.createdAt)}</p>
-              </div>
-              <strong>${money(orderTotal(order))}</strong>
-            </div>
-          `;
-        })
-        .join("")
-    : `<div class="empty-state">No orders today yet.</div>`;
+async function loadReports({ refreshDashboard = false } = {}) {
+  if (!staffUser?.restaurantId || !window.TableOrderCloud) return;
+  const loader = window.TableOrderCloud[REPORT_TAB_LOADERS[activeReportTab]];
+  if (!loader) {
+    reportError = "Run migration 009_reporting_layer.sql before loading reports.";
+    renderReports();
+    return;
+  }
+  const requestId = ++reportRequestId;
+  reportLoading = true;
+  reportError = "";
+  renderReports();
+  try {
+    const shouldLoadDashboard = refreshDashboard || !reportDashboard;
+    let dashboard = null;
+    if (shouldLoadDashboard) {
+      dashboard = await window.TableOrderCloud.loadReportDashboard(staffUser.restaurantId);
+      if (requestId !== reportRequestId) return;
+      reportDashboard = dashboard;
+      if (reportRangePreset !== "custom") reportRange = rangeForReportPreset(reportRangePreset);
+    }
+    const data = await loader(staffUser.restaurantId, currentReportRange());
+    if (requestId !== reportRequestId) return;
+    reportData[activeReportTab] = data;
+  } catch (error) {
+    if (requestId !== reportRequestId) return;
+    reportError = error.message;
+  } finally {
+    if (requestId === reportRequestId) {
+      reportLoading = false;
+      renderReports();
+    }
+  }
 }
 
 function renderSetup() {
@@ -2356,25 +2566,70 @@ function printInvoice(tableId) {
 }
 
 function printDailyReport() {
-  const profile = restaurant();
-  const paidOrders = paidReportOrders();
-  const grossSales = paidOrders.reduce((sum, order) => sum + orderTotal(order), 0);
-  const tax = paidOrders.reduce((sum, order) => sum + orderTax(order), 0);
-  const popular = popularItemsForToday();
-
+  if (!reportDashboard || !reportData[activeReportTab]) {
+    showOrderToast("Load the report before printing.", "warning");
+    return;
+  }
+  const workspace = document.getElementById("reportWorkspace");
   setPrintContent(`
-    <h2>Daily Report</h2>
-    <p>${escapeHtml(profile.name)}</p>
-    <p>${dateLabel(new Date())}</p>
+    <h2>${escapeHtml(REPORT_TAB_LABELS[activeReportTab])} Report</h2>
+    <p>${escapeHtml(restaurant().name)}</p>
+    <p>${escapeHtml(reportRangeText())}</p>
     <hr>
-    <p>Paid sales: ${money(grossSales)}</p>
-    <p>Paid orders: ${paidOrders.length}</p>
-    <p>GST included: ${money(tax)}</p>
+    <p>Today's sales: ${money(reportDashboard.today_sales || 0)}</p>
+    <p>Orders today: ${Number(reportDashboard.orders_today) || 0}</p>
+    <p>Active tables: ${Number(reportDashboard.active_tables) || 0}</p>
     <hr>
-    <h3>Popular Items</h3>
-    ${popular.map((item) => `<p>${escapeHtml(item.name)}<br>${item.quantity} sold - ${money(item.revenue)}</p>`).join("") || "<p>No item sales today.</p>"}
+    ${workspace?.innerHTML || "<p>No report data.</p>"}
   `);
   printPreparedContent();
+}
+
+function reportCsvRows() {
+  const data = reportData[activeReportTab] || {};
+  if (activeReportTab === "sales") return [
+    ["Period", "Sales", "Orders", "Average order"],
+    ...(data.rows || []).map((row) => [row.period_start, row.sales, row.order_count, row.average_order_value])
+  ];
+  if (activeReportTab === "menu") return [
+    ["Section", "Name", "Quantity", "Revenue"],
+    ...(data.top_items || []).map((row) => ["Best-selling", row.item_name, row.quantity, row.revenue]),
+    ...(data.lowest_items || []).map((row) => ["Lowest-selling", row.item_name, row.quantity, row.revenue]),
+    ...(data.categories || []).map((row) => ["Category", row.category_name, row.quantity, row.revenue])
+  ];
+  if (activeReportTab === "tables") return [
+    ["Table", "Sales", "Orders", "Average spend"],
+    ...(data.rows || []).map((row) => [row.table_name, row.sales, row.order_count, row.average_spend])
+  ];
+  if (activeReportTab === "hourly") return [
+    ["Hour", "Orders", "Sales"],
+    ...(data.rows || []).map((row) => [`${String(row.hour).padStart(2, "0")}:00`, row.order_count, row.sales])
+  ];
+  return [
+    ["Completed orders", "Cancelled orders", "Average preparation minutes", "Average order value", "Completed sales"],
+    [data.completed_orders, data.cancelled_orders, data.average_preparation_minutes ?? "", data.average_order_value, data.completed_sales]
+  ];
+}
+
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function exportCurrentReportCsv() {
+  if (!reportData[activeReportTab]) {
+    showOrderToast("Load the report before exporting.", "warning");
+    return;
+  }
+  const csv = `\uFEFF${reportCsvRows().map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `aveniq-${activeReportTab}-${currentReportRange().from}-to-${currentReportRange().to}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function renderPrintOrder(order, title) {
@@ -2846,6 +3101,7 @@ function cloudMenuPayload() {
     tags: item.tags || [],
     photoUrl: normalizePhotoUrl(item.photoData),
     optionTemplate: item.optionTemplate || "none",
+    optionConfig: Array.isArray(item.optionConfig) ? item.optionConfig : optionConfigForTemplate(item.optionTemplate),
     soldOut: itemSoldOut(item)
   }));
 }
@@ -3009,6 +3265,7 @@ async function loadCloudDataIntoApp(options = {}) {
       phone: cloud.restaurant.phone || "",
       taxId: cloud.restaurant.tax_id || "",
       taxRate: Number(cloud.restaurant.tax_rate) || defaultRestaurant.taxRate,
+      timezone: cloud.restaurant.timezone || currentProfile.timezone || "Australia/Sydney",
       isOpen: cloud.restaurant.is_open,
       logoData: cloud.restaurant.logo_url || currentProfile.logoData,
       cloudId: cloud.restaurant.id
@@ -3045,6 +3302,7 @@ async function loadCloudDataIntoApp(options = {}) {
       categoryId: item.category_id || null,
       photoData: item.image_url || item.photo_url || "",
       optionTemplate: item.option_template || "none",
+      optionConfig: Array.isArray(item.option_config) ? item.option_config : optionConfigForTemplate(item.option_template),
       soldOut: item.is_available === false || item.sold_out
     }));
     state.soldOutIds = cloud.menuItems.filter((item) => item.is_available === false || item.sold_out).map((item) => item.local_id);
@@ -3124,6 +3382,7 @@ async function addMenuItem(event) {
     photo: `photo-${(allMenuItems().length % 4) + 1}`,
     photoData,
     optionTemplate,
+    optionConfig: optionConfigForTemplate(optionTemplate),
     soldOut: false
   };
 
@@ -3746,6 +4005,43 @@ function bindGlobalActions() {
     showOrderToast(`${localOrders.length} local-only order${localOrders.length === 1 ? "" : "s"} cleared.`);
   });
   document.getElementById("printReport").addEventListener("click", printDailyReport);
+  document.getElementById("exportReportCsv").addEventListener("click", exportCurrentReportCsv);
+  document.getElementById("reportRangePresets").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-report-range]");
+    if (!button) return;
+    reportRangePreset = button.dataset.reportRange;
+    if (reportRangePreset !== "custom") {
+      reportRange = rangeForReportPreset(reportRangePreset);
+      reportData = {};
+      loadReports();
+    } else {
+      reportRange ||= rangeForReportPreset("today");
+      renderReports();
+      document.getElementById("reportFrom").focus();
+    }
+  });
+  document.getElementById("reportCustomRange").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const from = document.getElementById("reportFrom").value;
+    const to = document.getElementById("reportTo").value;
+    const days = from && to ? Math.round((new Date(`${to}T00:00:00Z`) - new Date(`${from}T00:00:00Z`)) / 86400000) : -1;
+    if (!from || !to || days < 0 || days > 365) {
+      reportError = "Choose a valid range of up to 366 days.";
+      renderReports();
+      return;
+    }
+    reportRange = { from, to };
+    reportData = {};
+    loadReports();
+  });
+  document.getElementById("reportTabs").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-report-tab]");
+    if (!button || button.dataset.reportTab === activeReportTab) return;
+    activeReportTab = button.dataset.reportTab;
+    reportError = "";
+    renderReports();
+    if (!reportData[activeReportTab]) loadReports();
+  });
   document.getElementById("printBillTop").addEventListener("click", () => {
     setView("frontdesk");
     printInvoice(selectedFrontTableId);

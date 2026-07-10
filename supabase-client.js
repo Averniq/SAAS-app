@@ -112,7 +112,13 @@
     if (!authSession?.refresh_token) return storeSession(null);
     try {
       return storeSession(await authRequest("token?grant_type=refresh_token", { method: "POST", body: JSON.stringify({ refresh_token: authSession.refresh_token }) }));
-    } catch (error) { storeSession(null); throw error; }
+    } catch (error) {
+      storeSession(null);
+      // A refresh token can be revoked, rotated in another tab, or simply expire.
+      // That is a normal signed-out state, not an application error to surface on load.
+      if ([400, 401].includes(error.status)) return null;
+      throw error;
+    }
   }
 
   async function getSession() {
@@ -298,6 +304,7 @@
         restaurant_id: restaurantId, category_id: category?.id || null, local_id: item.id || createUuid(), category: item.category || "Menu",
         name: item.name, description: item.description || "", price: Number(item.price), image_url: item.photoData || item.imageUrl || "",
         photo_url: item.photoData || item.imageUrl || "", tags: item.tags || [], option_template: item.optionTemplate || "none",
+        option_config: Array.isArray(item.optionConfig) ? item.optionConfig : [],
         sold_out: Boolean(item.soldOut), is_available: !item.soldOut, sort_order: sortOrder
       })
     });
@@ -330,7 +337,12 @@
 
   async function submitOrder(order, restaurantId, tableId) {
     if (!restaurantId || !tableId) throw new Error("Restaurant or table is missing.");
-    const items = order.items.map((item) => ({ menu_item_id: item.menuItemCloudId, name: item.name, quantity: item.quantity, notes: item.notes || "", options: item.options || [] }));
+    const items = order.items.map((item) => ({
+      menu_item_id: item.menuItemCloudId,
+      quantity: item.quantity,
+      notes: item.notes || "",
+      options: (item.options || []).map((option) => ({ groupId: option.groupId, choiceId: option.choiceId }))
+    }));
     const result = await request("rpc/submit_order", {
       method: "POST",
       body: JSON.stringify({ p_restaurant_id: restaurantId, p_table_id: tableId, p_local_id: order.id, p_note: order.note || "", p_items: items, p_customer_name: order.customerName || "" })
@@ -350,6 +362,28 @@
       { accessToken: session.access_token }
     );
   }
+
+  async function loadReportRpc(name, restaurantId, range = null) {
+    const session = await getSession();
+    if (!session || !restaurantId) throw new Error("Report access requires a restaurant login.");
+    const body = { p_restaurant_id: restaurantId };
+    if (range) {
+      body.p_from = range.from;
+      body.p_to = range.to;
+    }
+    return request(`rpc/${name}`, {
+      method: "POST",
+      accessToken: session.access_token,
+      body: JSON.stringify(body)
+    });
+  }
+
+  function loadReportDashboard(restaurantId) { return loadReportRpc("get_report_dashboard", restaurantId); }
+  function loadSalesReport(restaurantId, range) { return loadReportRpc("get_sales_report", restaurantId, range); }
+  function loadMenuReport(restaurantId, range) { return loadReportRpc("get_menu_report", restaurantId, range); }
+  function loadTableReport(restaurantId, range) { return loadReportRpc("get_table_report", restaurantId, range); }
+  function loadHourlyReport(restaurantId, range) { return loadReportRpc("get_hourly_report", restaurantId, range); }
+  function loadOrderReport(restaurantId, range) { return loadReportRpc("get_order_report", restaurantId, range); }
 
   async function scopedPatch(table, rowId, restaurantId, fields) {
     const session = await getSession();
@@ -413,6 +447,7 @@
   window.TableOrderCloud = {
     config, routeContext, request, checkConnection, loadRestaurantData, bootstrapMenu, submitOrder, loadCustomerOrderStatus,
     loadOrders, updateOrderStatus, updateMenuItemPhoto, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
+    loadReportDashboard, loadSalesReport, loadMenuReport, loadTableReport, loadHourlyReport, loadOrderReport,
     createRestaurantTable, updateRestaurantTable, deactivateRestaurantTable, updateRestaurantProfile,
     signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, signOut,
     loadPlatformRestaurants, platformCreateRestaurant,

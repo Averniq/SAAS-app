@@ -5,6 +5,8 @@
     "build": "tailwindcss -i ./src/tailwind.css -o ./styles.css --minify && node ./scripts/build-site.mjs",
     "build:css": "tailwindcss -i ./src/tailwind.css -o ./styles.css --minify",
     "build:site": "node ./scripts/build-site.mjs",
+    "provision:authorization-users": "node ./scripts/provision-authorization-users.mjs",
+    "test:authorization": "node ./scripts/test-authorization.mjs",
     "serve": "node ./scripts/serve.mjs",
     "watch:css": "tailwindcss -i ./src/tailwind.css -o ./styles.css --watch",
     "mobile:sync": "pnpm run build && cap sync",
