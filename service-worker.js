@@ -1,11 +1,11 @@
-const SHELL_CACHE = "aveniq-shell-v15";
-const RUNTIME_CACHE = "aveniq-runtime-v15";
+const SHELL_CACHE = "aveniq-shell-v16";
+const RUNTIME_CACHE = "aveniq-runtime-v16";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
-  "/styles.css?v=20260716-2",
-  "/app.js?v=20260716-2"
+  "/styles.css?v=20260716-3",
+  "/app.js?v=20260716-3"
 ];
 
 self.addEventListener("install", (event) => {
