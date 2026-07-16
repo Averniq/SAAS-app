@@ -10,5 +10,6 @@
   "orientation": "portrait-primary",
   "background_color": "#181513",
   "theme_color": "#181513",
-  "categories": ["food", "business"]
+  "categories": ["food", "business"],
+  "prefer_related_applications": false
 }
