@@ -1169,6 +1169,7 @@ function cloudOrderToLocal(row) {
     subtotal: Number(row.subtotal) || 0,
     tax: Number(row.tax) || 0,
     total: Number(row.total) || 0,
+    payment: row.payment_method ? { method: row.payment_method, paidAt: row.paid_at || row.closed_at || null } : null,
     cloudStatus: "synced",
     items: (row.order_items || []).map((item) => ({
       itemId: item.menu_item_id || "",
@@ -1399,12 +1400,12 @@ function renderMenu() {
           <div class="menu-body">
             <div class="menu-meta">
               <h3>${escapeHtml(item.name)}</h3>
-              <strong>${money(item.price)}</strong>
             </div>
+            <p class="menu-category">${escapeHtml(item.category)}</p>
             <p class="menu-desc">${escapeHtml(item.description)}</p>
             <div class="tag-row">${tags}${optionLabel}</div>
-            <button data-add="${item.id}" ${soldOut || !profile.isOpen ? "disabled" : ""}>${soldOut ? "Sold Out" : profile.isOpen ? "Add" : "Closed"}</button>
           </div>
+          <div class="menu-buy"><strong>${money(item.price)}</strong><button aria-label="Add ${escapeHtml(item.name)}" data-add="${item.id}" ${soldOut || !profile.isOpen ? "disabled" : ""}>${soldOut ? "×" : profile.isOpen ? "+" : "—"}</button></div>
         </article>
       `;
     })
@@ -1419,6 +1420,32 @@ function renderMenu() {
       } else {
         addToCart(id);
       }
+    });
+  });
+}
+
+function renderAlsoOrdered() {
+  const panel = document.getElementById("alsoOrdered");
+  if (!panel) return;
+  const orderedCounts = new Map();
+  state.orders.forEach((order) => (order.items || []).forEach((line) => {
+    orderedCounts.set(line.itemId, (orderedCounts.get(line.itemId) || 0) + Number(line.quantity || 0));
+  }));
+  const picks = allMenuItems()
+    .filter((item) => !itemSoldOut(item))
+    .sort((left, right) => (orderedCounts.get(right.id) || 0) - (orderedCounts.get(left.id) || 0) || left.name.localeCompare(right.name))
+    .slice(0, 3);
+  if (!picks.length) {
+    panel.innerHTML = "";
+    return;
+  }
+  panel.innerHTML = `<div class="also-ordered-heading"><div><p class="eyebrow">A little extra</p><h2>Customers also ordered</h2></div></div><div class="also-ordered-list">${picks.map((item) => `<button class="also-ordered-item" type="button" data-recommendation="${escapeHtml(item.id)}"><span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.category)}</small></span><b>${money(item.price)} +</b></button>`).join("")}</div>`;
+  panel.querySelectorAll("[data-recommendation]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = itemById(button.dataset.recommendation);
+      if (!item) return;
+      if (modifierGroupsForItem(item).length) openOptionModal(item.id);
+      else addToCart(item.id);
     });
   });
 }
@@ -1455,6 +1482,7 @@ function renderCart() {
   document.getElementById("cartTotal").textContent = money(cartTotal());
   document.getElementById("submitOrder").disabled = !profile.isOpen || !entries.length;
   document.getElementById("submitOrder").textContent = profile.isOpen ? "Send to Kitchen" : "Ordering Closed";
+  renderMobileCustomerControls(entries);
   renderOrderConfirmation();
   list.querySelectorAll("[data-inc]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1757,25 +1785,32 @@ async function updateOrderStatus(orderId, status) {
   }
 }
 
-async function markOrdersPaid(orders) {
-  const previous = orders.map((order) => ({ order, status: order.status, closedAt: order.closedAt }));
+async function markOrdersPaid(orders, method = "Card") {
+  if (!orders.length || orders.some((order) => order.status === "Paid")) return;
+  const previous = orders.map((order) => ({ order, status: order.status, closedAt: order.closedAt, payment: order.payment || null }));
   const closedAt = new Date().toISOString();
   orders.forEach((order) => {
     order.status = "Paid";
     order.closedAt = closedAt;
+    order.payment = { method, paidAt: closedAt };
   });
   saveState();
   render();
 
   try {
-    await Promise.all(orders.filter((order) => order.cloudId).map((order) => window.TableOrderCloud.updateOrderStatus(order.cloudId, "Paid")));
+    await Promise.all(orders.filter((order) => order.cloudId).map((order) =>
+      window.TableOrderCloud.recordOrderPayment
+        ? window.TableOrderCloud.recordOrderPayment(order.cloudId, { method, total: orderTotal(order), paidAt: closedAt })
+        : window.TableOrderCloud.updateOrderStatus(order.cloudId, "Paid")
+    ));
     lastCloudSyncAt = new Date();
     setCloudSyncStatus("live", "Live", cloudSyncSummary());
     syncCloudOrders({ notify: false });
   } catch (error) {
-    previous.forEach(({ order, status, closedAt: oldClosedAt }) => {
+    previous.forEach(({ order, status, closedAt: oldClosedAt, payment }) => {
       order.status = status;
       order.closedAt = oldClosedAt;
+      order.payment = payment;
     });
     saveState();
     render();
@@ -1914,13 +1949,14 @@ function renderInvoice() {
     <div class="line-row"><span>GST included</span><strong>${money(tax)}</strong></div>
     <div class="line-row"><span>Total</span><strong>${money(total)}</strong></div>
     <div class="invoice-actions">
+      <select id="paymentMethod" aria-label="Payment method"><option>Card</option><option>Cash</option><option>EFTPOS</option><option>Other</option></select>
       <button class="primary-button" id="printInvoice">Print Invoice</button>
-      <button class="ghost-button" id="markPaid">Mark Paid</button>
+      <button class="ghost-button" id="markPaid">Record payment</button>
     </div>
   `;
 
   document.getElementById("printInvoice").addEventListener("click", () => printInvoice(table.id));
-  document.getElementById("markPaid").addEventListener("click", () => markOrdersPaid(orders));
+  document.getElementById("markPaid").addEventListener("click", () => markOrdersPaid(orders, document.getElementById("paymentMethod").value));
 }
 
 const REPORT_TAB_LABELS = { sales: "Sales", menu: "Menu", tables: "Tables", hourly: "Hourly", orders: "Orders" };
@@ -3593,6 +3629,19 @@ function setOwnerFlowError(message = "", target = "ownerAuthError") {
   node.classList.toggle("hidden", !message);
 }
 
+function renderMobileCustomerControls(entries = cartEntries()) {
+  const dock = document.getElementById("mobileCartDock");
+  const nav = document.getElementById("mobileBottomNav");
+  if (!dock || !nav) return;
+  const isCustomer = !staffUser && activeView === "customer";
+  const quantity = entries.reduce((sum, entry) => sum + Number(entry.quantity || 0), 0);
+  dock.classList.toggle("hidden", !isCustomer || !quantity);
+  nav.classList.toggle("hidden", !isCustomer);
+  document.getElementById("mobileCartCount").textContent = String(quantity);
+  document.getElementById("mobileCartTotal").textContent = money(cartTotal());
+}
+
+
 function showOwnerAuth() {
   setGatewayVisible(true);
   document.getElementById("ownerAuthPanel").classList.remove("hidden");
@@ -3991,18 +4040,21 @@ function bindGlobalActions() {
 
   document.getElementById("submitOrder").addEventListener("click", submitOrder);
   document.getElementById("printKitchen").addEventListener("click", printKitchen);
+  document.getElementById("mobileCartDock").addEventListener("click", () => {
+    document.querySelector(".order-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  document.getElementById("mobileBottomNav").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-mobile-nav]");
+    if (!button) return;
+    const action = button.dataset.mobileNav;
+    if (action === "home") window.scrollTo({ top: 0, behavior: "smooth" });
+    if (action === "menu") document.getElementById("categoryRow")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (action === "orders") scrollToCustomerOrderStatus();
+    if (action === "account") openStaffLogin();
+  });
   document.getElementById("clearLocalOrders").addEventListener("click", () => {
-    const localOrders = state.orders.filter((order) => !order.cloudId && order.cloudStatus !== "synced");
-    if (!localOrders.length) {
-      showOrderToast("No local-only orders to clear.");
-      return;
-    }
-    if (!window.confirm(`Clear ${localOrders.length} local-only order${localOrders.length === 1 ? "" : "s"}?`)) return;
-    const localIds = new Set(localOrders.map((order) => order.id));
-    state.orders = state.orders.filter((order) => !localIds.has(order.id));
-    saveState();
-    render();
-    showOrderToast(`${localOrders.length} local-only order${localOrders.length === 1 ? "" : "s"} cleared.`);
+    clearKitchenNewOrderAlert();
+    showOrderToast("Local display cleared. Orders were not deleted.");
   });
   document.getElementById("printReport").addEventListener("click", printDailyReport);
   document.getElementById("exportReportCsv").addEventListener("click", exportCurrentReportCsv);
@@ -4121,6 +4173,7 @@ function render() {
   renderTablePicker();
   renderCategories();
   renderMenu();
+  renderAlsoOrdered();
   renderCart();
   renderCustomerOrderStatus();
   renderKitchen();

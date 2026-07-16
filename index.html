@@ -10,7 +10,7 @@
     <meta name="format-detection" content="telephone=no" />
     <title>Aveniq Restaurant Ordering</title>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="/styles.css?v=20260710-1" />
+    <link rel="stylesheet" href="/styles.css?v=20260716-2" />
   </head>
   <body>
     <section class="account-gateway hidden" id="accountGateway" aria-live="polite">
@@ -226,6 +226,8 @@
         <div class="customer-layout">
           <section class="menu-grid" id="menuGrid" aria-label="Menu items"></section>
 
+          <section class="also-ordered" id="alsoOrdered" aria-label="Customers also ordered"></section>
+
           <aside class="order-panel" aria-label="Current cart">
             <div class="panel-title">
               <h2>Cart</h2>
@@ -261,7 +263,7 @@
             <h2>Kitchen Orders</h2>
           </div>
           <div class="toolbar-actions">
-            <button class="ghost-button" id="clearLocalOrders" type="button">Clear Local</button>
+            <button class="ghost-button" id="clearLocalOrders" type="button" title="Only clears local display state; it never deletes an order.">Clear local display</button>
             <button class="primary-button" id="printKitchen">Print New</button>
           </div>
         </div>
@@ -563,6 +565,18 @@
       </section>
     </main>
 
+    <button class="mobile-cart-dock hidden" id="mobileCartDock" type="button" aria-label="Open cart">
+      <span><b id="mobileCartCount">0</b> items</span>
+      <strong id="mobileCartTotal">$0.00</strong>
+      <span>View cart</span>
+    </button>
+    <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Customer navigation">
+      <button type="button" data-mobile-nav="home">Home</button>
+      <button type="button" data-mobile-nav="menu">Menu</button>
+      <button type="button" data-mobile-nav="orders">Orders</button>
+      <button type="button" data-mobile-nav="account">Account</button>
+    </nav>
+
     <div class="modal-backdrop hidden" id="optionModal" role="dialog" aria-modal="true" aria-labelledby="optionTitle">
       <section class="option-modal">
         <div class="panel-title">
@@ -617,7 +631,7 @@
 
     <script src="/mobile-shell.js?v=20260703-1"></script>
     <script src="/supabase-config.js?v=20260703-1"></script>
-    <script src="/supabase-client.js?v=20260710-1"></script>
-    <script src="/app.js?v=20260710-1"></script>
+    <script src="/supabase-client.js?v=20260716-1"></script>
+    <script src="/app.js?v=20260716-2"></script>
   </body>
 </html>

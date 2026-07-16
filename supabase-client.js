@@ -358,7 +358,7 @@
     const session = await getSession();
     if (!session) throw new Error("Staff login is required.");
     return request(
-      `orders?select=id,local_id,order_number,restaurant_id,table_id,customer_name,status,note,subtotal,tax,total,created_at,served_at,closed_at,tables(local_id,table_name),order_items(id,menu_item_id,item_name,price,quantity,notes,options)&restaurant_id=eq.${encodeURIComponent(restaurantId)}&order=created_at.desc&limit=500`,
+      `orders?select=id,local_id,order_number,restaurant_id,table_id,customer_name,status,note,subtotal,tax,total,payment_method,paid_at,created_at,served_at,closed_at,tables(local_id,table_name),order_items(id,menu_item_id,item_name,price,quantity,notes,options)&restaurant_id=eq.${encodeURIComponent(restaurantId)}&order=created_at.desc&limit=500`,
       { accessToken: session.access_token }
     );
   }
@@ -416,6 +416,21 @@
     }
   }
 
+  async function recordOrderPayment(orderId, payment, restaurantId) {
+    const session = await getSession();
+    const tenantId = restaurantId || activeMembership?.restaurantId;
+    if (!session || !tenantId) throw new Error("Restaurant context is missing.");
+    return request("rpc/record_restaurant_order_payment", {
+      method: "POST",
+      accessToken: session.access_token,
+      body: JSON.stringify({
+        p_restaurant_id: tenantId,
+        p_order_id: orderId,
+        p_method: payment.method || "Other"
+      })
+    });
+  }
+
   function updateMenuItemPhoto(id, photoUrl, restaurantId) { return scopedPatch("menu_items", id, restaurantId, { image_url: photoUrl || "", photo_url: photoUrl || "" }); }
   function updateMenuItemSoldOut(id, soldOut, restaurantId) { return scopedPatch("menu_items", id, restaurantId, { sold_out: Boolean(soldOut), is_available: !soldOut }); }
   function deactivateMenuItem(id, restaurantId) { return scopedPatch("menu_items", id, restaurantId, { is_active: false, is_available: false }); }
@@ -446,7 +461,7 @@
 
   window.TableOrderCloud = {
     config, routeContext, request, checkConnection, loadRestaurantData, bootstrapMenu, submitOrder, loadCustomerOrderStatus,
-    loadOrders, updateOrderStatus, updateMenuItemPhoto, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
+    loadOrders, updateOrderStatus, recordOrderPayment, updateMenuItemPhoto, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
     loadReportDashboard, loadSalesReport, loadMenuReport, loadTableReport, loadHourlyReport, loadOrderReport,
     createRestaurantTable, updateRestaurantTable, deactivateRestaurantTable, updateRestaurantProfile,
     signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, signOut,
