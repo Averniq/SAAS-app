@@ -1,0 +1,1133 @@
+[
+  {
+    "optimized_file": "kingfish-nigiri.webp",
+    "url_path": "/assets/menu-photos/kingfish-nigiri.webp",
+    "suggested_menu_name": "Kingfish Nigiri",
+    "source_file_used": "Image_20260625202644_178_273.jpg",
+    "source_index_first_seen": 1,
+    "duplicate_source_count": 3,
+    "duplicate_source_files": [
+      "Image_20260625202348_105_273(1).jpg",
+      "Image_20260625202348_105_273.jpg",
+      "Image_20260625202644_178_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2405.3,
+    "optimized_kb": 46.6,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "pork-gyoza.webp",
+    "url_path": "/assets/menu-photos/pork-gyoza.webp",
+    "suggested_menu_name": "Pork Gyoza",
+    "source_file_used": "Image_20260625202647_179_273.jpg",
+    "source_index_first_seen": 3,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202350_106_273.jpg",
+      "Image_20260625202647_179_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3071.2,
+    "optimized_kb": 53.7,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "miso-soup.webp",
+    "url_path": "/assets/menu-photos/miso-soup.webp",
+    "suggested_menu_name": "Miso Soup",
+    "source_file_used": "Image_20260625202651_180_273.jpg",
+    "source_index_first_seen": 4,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202353_107_273.jpg",
+      "Image_20260625202651_180_273.jpg"
+    ],
+    "source_width": 3024,
+    "source_height": 4032,
+    "source_kb": 2120.0,
+    "optimized_kb": 53.5,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "california-roll.webp",
+    "url_path": "/assets/menu-photos/california-roll.webp",
+    "suggested_menu_name": "California Roll",
+    "source_file_used": "Image_20260625202654_181_273.jpg",
+    "source_index_first_seen": 5,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202355_108_273.jpg",
+      "Image_20260625202654_181_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2492.5,
+    "optimized_kb": 70.3,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "salmon-maki.webp",
+    "url_path": "/assets/menu-photos/salmon-maki.webp",
+    "suggested_menu_name": "Salmon Maki",
+    "source_file_used": "Image_20260625202712_182_273.jpg",
+    "source_index_first_seen": 6,
+    "duplicate_source_count": 4,
+    "duplicate_source_files": [
+      "Image_20260625202410_109_273.jpg",
+      "Image_20260625202547_152_273.jpg",
+      "Image_20260625202712_182_273.jpg",
+      "Image_20260625202915_220_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2483.2,
+    "optimized_kb": 63.8,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "cucumber-maki.webp",
+    "url_path": "/assets/menu-photos/cucumber-maki.webp",
+    "suggested_menu_name": "Cucumber Maki",
+    "source_file_used": "Image_20260625202736_183_273.jpg",
+    "source_index_first_seen": 7,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202412_110_273.jpg",
+      "Image_20260625202736_183_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2911.2,
+    "optimized_kb": 27.0,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "tofu-avocado-salad.webp",
+    "url_path": "/assets/menu-photos/tofu-avocado-salad.webp",
+    "suggested_menu_name": "Tofu Avocado Salad",
+    "source_file_used": "Image_20260625202739_184_273.jpg",
+    "source_index_first_seen": 8,
+    "duplicate_source_count": 4,
+    "duplicate_source_files": [
+      "Image_20260625202414_111_273.jpg",
+      "Image_20260625202520_143_273.jpg",
+      "Image_20260625202739_184_273.jpg",
+      "Image_20260625202900_214_273.jpg"
+    ],
+    "source_width": 3024,
+    "source_height": 4032,
+    "source_kb": 2890.1,
+    "optimized_kb": 118.1,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "sashimi-platter.webp",
+    "url_path": "/assets/menu-photos/sashimi-platter.webp",
+    "suggested_menu_name": "Sashimi Platter",
+    "source_file_used": "Image_20260625202741_185_273.jpg",
+    "source_index_first_seen": 9,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202416_113_273.jpg",
+      "Image_20260625202741_185_273.jpg"
+    ],
+    "source_width": 3024,
+    "source_height": 4032,
+    "source_kb": 4559.2,
+    "optimized_kb": 138.5,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "salmon-salad.webp",
+    "url_path": "/assets/menu-photos/salmon-salad.webp",
+    "suggested_menu_name": "Salmon Salad",
+    "source_file_used": "Image_20260625202744_186_273.jpg",
+    "source_index_first_seen": 10,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202418_114_273.jpg",
+      "Image_20260625202744_186_273.jpg"
+    ],
+    "source_width": 3024,
+    "source_height": 4032,
+    "source_kb": 3312.8,
+    "optimized_kb": 166.6,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "kimchi.webp",
+    "url_path": "/assets/menu-photos/kimchi.webp",
+    "suggested_menu_name": "Kimchi",
+    "source_file_used": "Image_20260625202746_187_273.jpg",
+    "source_index_first_seen": 11,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202423_115_273.jpg",
+      "Image_20260625202746_187_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2294.8,
+    "optimized_kb": 41.5,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "seaweed-salad.webp",
+    "url_path": "/assets/menu-photos/seaweed-salad.webp",
+    "suggested_menu_name": "Seaweed Salad",
+    "source_file_used": "Image_20260625202748_188_273.jpg",
+    "source_index_first_seen": 12,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202425_116_273.jpg",
+      "Image_20260625202748_188_273.jpg"
+    ],
+    "source_width": 3024,
+    "source_height": 4032,
+    "source_kb": 2467.8,
+    "optimized_kb": 65.9,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "salmon-nigiri.webp",
+    "url_path": "/assets/menu-photos/salmon-nigiri.webp",
+    "suggested_menu_name": "Salmon Nigiri",
+    "source_file_used": "Image_20260625202751_189_273.jpg",
+    "source_index_first_seen": 13,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202428_117_273.jpg",
+      "Image_20260625202751_189_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2721.8,
+    "optimized_kb": 35.3,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "katsu-chicken.webp",
+    "url_path": "/assets/menu-photos/katsu-chicken.webp",
+    "suggested_menu_name": "Katsu Chicken",
+    "source_file_used": "Image_20260625202753_190_273.jpg",
+    "source_index_first_seen": 14,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202430_118_273.jpg",
+      "Image_20260625202753_190_273.jpg"
+    ],
+    "source_width": 3024,
+    "source_height": 4032,
+    "source_kb": 3392.9,
+    "optimized_kb": 101.7,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "pork-gyoza-2.webp",
+    "url_path": "/assets/menu-photos/pork-gyoza-2.webp",
+    "suggested_menu_name": "Pork Gyoza",
+    "source_file_used": "Image_20260625202801_191_273.jpg",
+    "source_index_first_seen": 15,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202432_119_273.jpg",
+      "Image_20260625202801_191_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2949.1,
+    "optimized_kb": 56.1,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "pork-gyoza-3.webp",
+    "url_path": "/assets/menu-photos/pork-gyoza-3.webp",
+    "suggested_menu_name": "Pork Gyoza",
+    "source_file_used": "Image_20260625202804_192_273.jpg",
+    "source_index_first_seen": 16,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202434_120_273.jpg",
+      "Image_20260625202804_192_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3082.3,
+    "optimized_kb": 63.9,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "salmon-salad-2.webp",
+    "url_path": "/assets/menu-photos/salmon-salad-2.webp",
+    "suggested_menu_name": "Salmon Salad",
+    "source_file_used": "Image_20260625202806_193_273.jpg",
+    "source_index_first_seen": 17,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202436_121_273.jpg",
+      "Image_20260625202806_193_273.jpg"
+    ],
+    "source_width": 3024,
+    "source_height": 4032,
+    "source_kb": 2625.0,
+    "optimized_kb": 91.9,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "pork-gyoza-4.webp",
+    "url_path": "/assets/menu-photos/pork-gyoza-4.webp",
+    "suggested_menu_name": "Pork Gyoza",
+    "source_file_used": "Image_20260625202809_194_273.jpg",
+    "source_index_first_seen": 18,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202438_122_273.jpg",
+      "Image_20260625202809_194_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2660.3,
+    "optimized_kb": 76.4,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "nigiri-platter.webp",
+    "url_path": "/assets/menu-photos/nigiri-platter.webp",
+    "suggested_menu_name": "Nigiri Platter",
+    "source_file_used": "Image_20260625202812_195_273.jpg",
+    "source_index_first_seen": 19,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202440_123_273.jpg",
+      "Image_20260625202812_195_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3256.6,
+    "optimized_kb": 114.8,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "karaage-chicken.webp",
+    "url_path": "/assets/menu-photos/karaage-chicken.webp",
+    "suggested_menu_name": "Karaage Chicken",
+    "source_file_used": "Image_20260625202814_196_273.jpg",
+    "source_index_first_seen": 20,
+    "duplicate_source_count": 6,
+    "duplicate_source_files": [
+      "Image_20260625202442_124_273.jpg",
+      "Image_20260625202456_131_273.jpg",
+      "Image_20260625202532_147_273.jpg",
+      "Image_20260625202814_196_273.jpg",
+      "Image_20260625202819_198_273.jpg",
+      "Image_20260625202832_203_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3143.6,
+    "optimized_kb": 120.5,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "mixed-sashimi.webp",
+    "url_path": "/assets/menu-photos/mixed-sashimi.webp",
+    "suggested_menu_name": "Mixed Sashimi",
+    "source_file_used": "Image_20260625202817_197_273.jpg",
+    "source_index_first_seen": 21,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202444_125_273.jpg",
+      "Image_20260625202817_197_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3068.5,
+    "optimized_kb": 93.8,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "pork-bun.webp",
+    "url_path": "/assets/menu-photos/pork-bun.webp",
+    "suggested_menu_name": "Pork Bun",
+    "source_file_used": "Image_20260625202933_227_273.jpg",
+    "source_index_first_seen": 22,
+    "duplicate_source_count": 5,
+    "duplicate_source_files": [
+      "Image_20260625202446_126_273.jpg",
+      "Image_20260625202601_159_273.jpg",
+      "Image_20260625202603_160_273.jpg",
+      "Image_20260625202933_227_273.jpg",
+      "Image_20260625202935_228_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3232.6,
+    "optimized_kb": 86.9,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "edamame.webp",
+    "url_path": "/assets/menu-photos/edamame.webp",
+    "suggested_menu_name": "Edamame",
+    "source_file_used": "Image_20260625202822_199_273.jpg",
+    "source_index_first_seen": 23,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202448_127_273.jpg",
+      "Image_20260625202822_199_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2338.8,
+    "optimized_kb": 53.8,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "spicy-edamame.webp",
+    "url_path": "/assets/menu-photos/spicy-edamame.webp",
+    "suggested_menu_name": "Spicy Edamame",
+    "source_file_used": "Image_20260625202824_200_273.jpg",
+    "source_index_first_seen": 24,
+    "duplicate_source_count": 4,
+    "duplicate_source_files": [
+      "Image_20260625202450_128_273.jpg",
+      "Image_20260625202604_161_273.jpg",
+      "Image_20260625202824_200_273.jpg",
+      "Image_20260625202937_229_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2084.6,
+    "optimized_kb": 65.8,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "miso-eggplant.webp",
+    "url_path": "/assets/menu-photos/miso-eggplant.webp",
+    "suggested_menu_name": "Miso Eggplant",
+    "source_file_used": "Image_20260625202827_201_273.jpg",
+    "source_index_first_seen": 25,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202452_129_273.jpg",
+      "Image_20260625202827_201_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2810.3,
+    "optimized_kb": 90.8,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "vegetarian-roll.webp",
+    "url_path": "/assets/menu-photos/vegetarian-roll.webp",
+    "suggested_menu_name": "Vegetarian Roll",
+    "source_file_used": "Image_20260625202829_202_273.jpg",
+    "source_index_first_seen": 26,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202454_130_273.jpg",
+      "Image_20260625202829_202_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3149.2,
+    "optimized_kb": 65.7,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "kingfish-sashimi.webp",
+    "url_path": "/assets/menu-photos/kingfish-sashimi.webp",
+    "suggested_menu_name": "Kingfish Sashimi",
+    "source_file_used": "Image_20260625202834_204_273.jpg",
+    "source_index_first_seen": 28,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202458_132_273.jpg",
+      "Image_20260625202834_204_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3114.4,
+    "optimized_kb": 46.5,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "vegetarian-roll-2.webp",
+    "url_path": "/assets/menu-photos/vegetarian-roll-2.webp",
+    "suggested_menu_name": "Vegetarian Roll",
+    "source_file_used": "Image_20260625202837_205_273.jpg",
+    "source_index_first_seen": 29,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202500_133_273.jpg",
+      "Image_20260625202837_205_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3257.9,
+    "optimized_kb": 70.4,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "cooked-tuna-roll.webp",
+    "url_path": "/assets/menu-photos/cooked-tuna-roll.webp",
+    "suggested_menu_name": "Cooked Tuna Roll",
+    "source_file_used": "Image_20260625202840_206_273.jpg",
+    "source_index_first_seen": 30,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202502_134_273.jpg",
+      "Image_20260625202840_206_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3078.5,
+    "optimized_kb": 61.9,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "teriyaki-chicken-roll.webp",
+    "url_path": "/assets/menu-photos/teriyaki-chicken-roll.webp",
+    "suggested_menu_name": "Teriyaki Chicken Roll",
+    "source_file_used": "Image_20260625202843_207_273.jpg",
+    "source_index_first_seen": 31,
+    "duplicate_source_count": 5,
+    "duplicate_source_files": [
+      "Image_20260625202504_135_273.jpg",
+      "Image_20260625202516_141_273.jpg",
+      "Image_20260625202536_148_273.jpg",
+      "Image_20260625202843_207_273.jpg",
+      "Image_20260625202905_216_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3357.5,
+    "optimized_kb": 141.1,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "vegetarian-sushi-roll.webp",
+    "url_path": "/assets/menu-photos/vegetarian-sushi-roll.webp",
+    "suggested_menu_name": "Vegetarian Sushi Roll",
+    "source_file_used": "Image_20260625202846_208_273.jpg",
+    "source_index_first_seen": 32,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202506_136_273.jpg",
+      "Image_20260625202846_208_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3219.0,
+    "optimized_kb": 64.0,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "kingfish-carpaccio.webp",
+    "url_path": "/assets/menu-photos/kingfish-carpaccio.webp",
+    "suggested_menu_name": "Kingfish Carpaccio",
+    "source_file_used": "Image_20260625202848_209_273.jpg",
+    "source_index_first_seen": 33,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202508_137_273.jpg",
+      "Image_20260625202848_209_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2896.6,
+    "optimized_kb": 48.6,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "sushi-roll.webp",
+    "url_path": "/assets/menu-photos/sushi-roll.webp",
+    "suggested_menu_name": "Sushi Roll",
+    "source_file_used": "Image_20260625202850_210_273.jpg",
+    "source_index_first_seen": 34,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202510_138_273.jpg",
+      "Image_20260625202850_210_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3196.9,
+    "optimized_kb": 61.6,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "sushi-roll-2.webp",
+    "url_path": "/assets/menu-photos/sushi-roll-2.webp",
+    "suggested_menu_name": "Sushi Roll",
+    "source_file_used": "Image_20260625202853_211_273.jpg",
+    "source_index_first_seen": 35,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202512_139_273.jpg",
+      "Image_20260625202853_211_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3281.9,
+    "optimized_kb": 70.0,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "sushi-roll-3.webp",
+    "url_path": "/assets/menu-photos/sushi-roll-3.webp",
+    "suggested_menu_name": "Sushi Roll",
+    "source_file_used": "Image_20260625202855_212_273.png",
+    "source_index_first_seen": 36,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202514_140_273.jpg",
+      "Image_20260625202855_212_273.png"
+    ],
+    "source_width": 1290,
+    "source_height": 2796,
+    "source_kb": 2314.6,
+    "optimized_kb": 53.9,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "tuna-maki.webp",
+    "url_path": "/assets/menu-photos/tuna-maki.webp",
+    "suggested_menu_name": "Tuna Maki",
+    "source_file_used": "Image_20260625202857_213_273.jpg",
+    "source_index_first_seen": 38,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202518_142_273.jpg",
+      "Image_20260625202857_213_273.jpg"
+    ],
+    "source_width": 3024,
+    "source_height": 4032,
+    "source_kb": 3524.8,
+    "optimized_kb": 131.5,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "tuna-nigiri.webp",
+    "url_path": "/assets/menu-photos/tuna-nigiri.webp",
+    "suggested_menu_name": "Tuna Nigiri",
+    "source_file_used": "Image_20260625202522_144_273.jpg",
+    "source_index_first_seen": 40,
+    "duplicate_source_count": 1,
+    "duplicate_source_files": [
+      "Image_20260625202522_144_273.jpg"
+    ],
+    "source_width": 1276,
+    "source_height": 958,
+    "source_kb": 88.0,
+    "optimized_kb": 49.5,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "ramen.webp",
+    "url_path": "/assets/menu-photos/ramen.webp",
+    "suggested_menu_name": "Ramen",
+    "source_file_used": "Image_20260625202528_145_273.jpg",
+    "source_index_first_seen": 41,
+    "duplicate_source_count": 1,
+    "duplicate_source_files": [
+      "Image_20260625202528_145_273.jpg"
+    ],
+    "source_width": 1702,
+    "source_height": 1276,
+    "source_kb": 239.0,
+    "optimized_kb": 109.5,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "salmon-sashimi.webp",
+    "url_path": "/assets/menu-photos/salmon-sashimi.webp",
+    "suggested_menu_name": "Salmon Sashimi",
+    "source_file_used": "Image_20260625202903_215_273.jpg",
+    "source_index_first_seen": 42,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202530_146_273.jpg",
+      "Image_20260625202903_215_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3063.7,
+    "optimized_kb": 38.1,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "fresh-salmon-deluxe-roll.webp",
+    "url_path": "/assets/menu-photos/fresh-salmon-deluxe-roll.webp",
+    "suggested_menu_name": "Fresh Salmon Deluxe Roll",
+    "source_file_used": "Image_20260625202908_217_273.jpg",
+    "source_index_first_seen": 45,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202540_149_273.jpg",
+      "Image_20260625202908_217_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2972.6,
+    "optimized_kb": 45.2,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "stir-fried-vegetables.webp",
+    "url_path": "/assets/menu-photos/stir-fried-vegetables.webp",
+    "suggested_menu_name": "Stir Fried Vegetables",
+    "source_file_used": "Image_20260625202910_218_273.jpg",
+    "source_index_first_seen": 46,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202543_150_273.jpg",
+      "Image_20260625202910_218_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2906.8,
+    "optimized_kb": 65.0,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "avocado-salad.webp",
+    "url_path": "/assets/menu-photos/avocado-salad.webp",
+    "suggested_menu_name": "Avocado Salad",
+    "source_file_used": "Image_20260625202912_219_273.jpg",
+    "source_index_first_seen": 47,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202545_151_273.jpg",
+      "Image_20260625202912_219_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3206.5,
+    "optimized_kb": 83.7,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "cucumber-maki-2.webp",
+    "url_path": "/assets/menu-photos/cucumber-maki-2.webp",
+    "suggested_menu_name": "Cucumber Maki",
+    "source_file_used": "Image_20260625202918_221_273.jpg",
+    "source_index_first_seen": 49,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202549_153_273.jpg",
+      "Image_20260625202918_221_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2714.9,
+    "optimized_kb": 30.3,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "sushi-roll-4.webp",
+    "url_path": "/assets/menu-photos/sushi-roll-4.webp",
+    "suggested_menu_name": "Sushi Roll",
+    "source_file_used": "Image_20260625202920_222_273.jpg",
+    "source_index_first_seen": 50,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202551_154_273.jpg",
+      "Image_20260625202920_222_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3276.3,
+    "optimized_kb": 66.5,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "miso-eggplant-2.webp",
+    "url_path": "/assets/menu-photos/miso-eggplant-2.webp",
+    "suggested_menu_name": "Miso Eggplant",
+    "source_file_used": "Image_20260625202923_223_273.jpg",
+    "source_index_first_seen": 51,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202553_155_273.jpg",
+      "Image_20260625202923_223_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3397.9,
+    "optimized_kb": 74.2,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "sushi-roll-5.webp",
+    "url_path": "/assets/menu-photos/sushi-roll-5.webp",
+    "suggested_menu_name": "Sushi Roll",
+    "source_file_used": "Image_20260625202925_224_273.jpg",
+    "source_index_first_seen": 52,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202555_156_273.jpg",
+      "Image_20260625202925_224_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3161.2,
+    "optimized_kb": 60.8,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "fresh-salmon-deluxe-roll-2.webp",
+    "url_path": "/assets/menu-photos/fresh-salmon-deluxe-roll-2.webp",
+    "suggested_menu_name": "Fresh Salmon Deluxe Roll",
+    "source_file_used": "Image_20260625202928_225_273.jpg",
+    "source_index_first_seen": 53,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202557_157_273.jpg",
+      "Image_20260625202928_225_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3124.4,
+    "optimized_kb": 59.3,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "nigiri-platter-2.webp",
+    "url_path": "/assets/menu-photos/nigiri-platter-2.webp",
+    "suggested_menu_name": "Nigiri Platter",
+    "source_file_used": "Image_20260625202930_226_273.jpg",
+    "source_index_first_seen": 54,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202559_158_273.jpg",
+      "Image_20260625202930_226_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2913.3,
+    "optimized_kb": 53.1,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "egg-tamago-maki.webp",
+    "url_path": "/assets/menu-photos/egg-tamago-maki.webp",
+    "suggested_menu_name": "Egg Tamago Maki",
+    "source_file_used": "Image_20260625202940_230_273.jpg",
+    "source_index_first_seen": 58,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202606_162_273.jpg",
+      "Image_20260625202940_230_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2404.3,
+    "optimized_kb": 48.8,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "teriyaki-chicken-maki.webp",
+    "url_path": "/assets/menu-photos/teriyaki-chicken-maki.webp",
+    "suggested_menu_name": "Teriyaki Chicken Maki",
+    "source_file_used": "Image_20260625202942_231_273.jpg",
+    "source_index_first_seen": 59,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202608_163_273.jpg",
+      "Image_20260625202942_231_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2522.2,
+    "optimized_kb": 53.3,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "tuna-tataki.webp",
+    "url_path": "/assets/menu-photos/tuna-tataki.webp",
+    "suggested_menu_name": "Tuna Tataki",
+    "source_file_used": "Image_20260625202945_232_273.jpg",
+    "source_index_first_seen": 60,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202610_164_273.jpg",
+      "Image_20260625202945_232_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3353.9,
+    "optimized_kb": 64.0,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "mixed-sashimi-2.webp",
+    "url_path": "/assets/menu-photos/mixed-sashimi-2.webp",
+    "suggested_menu_name": "Mixed Sashimi",
+    "source_file_used": "Image_20260625202947_233_273.jpg",
+    "source_index_first_seen": 61,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202612_165_273.jpg",
+      "Image_20260625202947_233_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2801.8,
+    "optimized_kb": 71.3,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "tempura-white-fish.webp",
+    "url_path": "/assets/menu-photos/tempura-white-fish.webp",
+    "suggested_menu_name": "Tempura White Fish",
+    "source_file_used": "Image_20260625202949_234_273.jpg",
+    "source_index_first_seen": 62,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202615_166_273.jpg",
+      "Image_20260625202949_234_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2929.6,
+    "optimized_kb": 89.9,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "tuna-tataki-2.webp",
+    "url_path": "/assets/menu-photos/tuna-tataki-2.webp",
+    "suggested_menu_name": "Tuna Tataki",
+    "source_file_used": "Image_20260625202952_235_273.jpg",
+    "source_index_first_seen": 63,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202617_167_273.jpg",
+      "Image_20260625202952_235_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3333.6,
+    "optimized_kb": 70.8,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "tempura-white-fish-2.webp",
+    "url_path": "/assets/menu-photos/tempura-white-fish-2.webp",
+    "suggested_menu_name": "Tempura White Fish",
+    "source_file_used": "Image_20260625202954_236_273.jpg",
+    "source_index_first_seen": 64,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202619_169_273.jpg",
+      "Image_20260625202954_236_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2363.6,
+    "optimized_kb": 65.5,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "tuna-tataki-3.webp",
+    "url_path": "/assets/menu-photos/tuna-tataki-3.webp",
+    "suggested_menu_name": "Tuna Tataki",
+    "source_file_used": "Image_20260625202957_237_273.jpg",
+    "source_index_first_seen": 65,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202621_170_273.jpg",
+      "Image_20260625202957_237_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2557.3,
+    "optimized_kb": 72.3,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "salmon-rice-bowl.webp",
+    "url_path": "/assets/menu-photos/salmon-rice-bowl.webp",
+    "suggested_menu_name": "Salmon Rice Bowl",
+    "source_file_used": "Image_20260625203000_238_273.jpg",
+    "source_index_first_seen": 66,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202623_171_273.jpg",
+      "Image_20260625203000_238_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3145.2,
+    "optimized_kb": 71.3,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "fried-prawn-roll.webp",
+    "url_path": "/assets/menu-photos/fried-prawn-roll.webp",
+    "suggested_menu_name": "Fried Prawn Roll",
+    "source_file_used": "Image_20260625203003_239_273.jpg",
+    "source_index_first_seen": 67,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202625_172_273.jpg",
+      "Image_20260625203003_239_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2998.5,
+    "optimized_kb": 50.2,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "tataki-plate.webp",
+    "url_path": "/assets/menu-photos/tataki-plate.webp",
+    "suggested_menu_name": "Tataki Plate",
+    "source_file_used": "Image_20260625203005_240_273.jpg",
+    "source_index_first_seen": 68,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202628_173_273.jpg",
+      "Image_20260625203005_240_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 4132.2,
+    "optimized_kb": 81.5,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "salmon-rice-bowl-2.webp",
+    "url_path": "/assets/menu-photos/salmon-rice-bowl-2.webp",
+    "suggested_menu_name": "Salmon Rice Bowl",
+    "source_file_used": "Image_20260625203008_241_273.jpg",
+    "source_index_first_seen": 69,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202630_174_273.jpg",
+      "Image_20260625203008_241_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 2736.6,
+    "optimized_kb": 75.9,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "karaage-ramen.webp",
+    "url_path": "/assets/menu-photos/karaage-ramen.webp",
+    "suggested_menu_name": "Karaage Ramen",
+    "source_file_used": "Image_20260625203010_242_273.jpg",
+    "source_index_first_seen": 70,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202634_175_273.jpg",
+      "Image_20260625203010_242_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3702.7,
+    "optimized_kb": 67.3,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "soft-shell-crab.webp",
+    "url_path": "/assets/menu-photos/soft-shell-crab.webp",
+    "suggested_menu_name": "Soft Shell Crab",
+    "source_file_used": "Image_20260625203013_243_273.jpg",
+    "source_index_first_seen": 71,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202637_176_273.jpg",
+      "Image_20260625203013_243_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 3783.6,
+    "optimized_kb": 74.1,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  },
+  {
+    "optimized_file": "dynamite-scallops.webp",
+    "url_path": "/assets/menu-photos/dynamite-scallops.webp",
+    "suggested_menu_name": "Dynamite Scallops",
+    "source_file_used": "Image_20260625203016_244_273.jpg",
+    "source_index_first_seen": 72,
+    "duplicate_source_count": 2,
+    "duplicate_source_files": [
+      "Image_20260625202641_177_273.jpg",
+      "Image_20260625203016_244_273.jpg"
+    ],
+    "source_width": 4032,
+    "source_height": 3024,
+    "source_kb": 4372.3,
+    "optimized_kb": 109.2,
+    "optimized_width": 1200,
+    "optimized_height": 800
+  }
+]

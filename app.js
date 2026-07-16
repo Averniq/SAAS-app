@@ -469,6 +469,16 @@ function normalizePhotoUrl(value) {
   }
 }
 
+function tenantMenuPhotoFallback(profile, item) {
+  if (profile?.slug !== "sake-street") return "";
+  const fallbackPhotos = {
+    "Miso soup": "/assets/menu-photos/miso-soup.webp",
+    "Karaage ramen": "/assets/menu-photos/karaage-ramen.webp",
+    "Spicy edamame": "/assets/menu-photos/spicy-edamame.webp"
+  };
+  return fallbackPhotos[item?.name] || "";
+}
+
 function allMenuItems() {
   return state.menuItems || defaultMenuItems;
 }
@@ -1390,7 +1400,7 @@ function renderMenu() {
         .map((tag) => `<span class="tag ${tag === "Hot" ? "hot" : tag === "Chef" ? "soft" : ""}">${escapeHtml(tag)}</span>`)
         .join("");
       const optionLabel = item.optionTemplate && item.optionTemplate !== "none" ? `<span class="tag soft">${escapeHtml(optionTemplateLabel(item.optionTemplate))}</span>` : "";
-      const photoUrl = normalizePhotoUrl(item.photoData);
+      const photoUrl = normalizePhotoUrl(item.photoData) || tenantMenuPhotoFallback(profile, item);
       const photo = photoUrl
         ? `<div class="food-photo custom-photo" style="background-image: url('${escapeHtml(photoUrl)}')" role="img" aria-label="${escapeHtml(item.name)}"></div>`
         : `<div class="food-photo ${item.photo}" role="img" aria-label="${escapeHtml(item.name)}"></div>`;
