@@ -88,12 +88,12 @@
 
   .brand-lockup { @apply flex min-w-0 items-center gap-3; }
   .brand-logo {
-    @apply grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border text-sm font-black;
+    @apply grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-lg border text-sm font-black;
     background: #fffdf8;
     color: var(--accent-dark);
     border-color: rgba(255,255,255,.28);
   }
-  .brand-logo img { @apply h-full w-full object-contain p-1.5; }
+  .brand-logo img { @apply h-full w-full object-contain p-1; }
   .header-actions { @apply flex items-center justify-end gap-2; }
   .header-login-button { @apply border-white/20 bg-white/10 text-white hover:bg-white/15; }
   .sound-toggle { @apply min-w-[88px] border-white/20 bg-white/10 px-3 text-white hover:bg-white/15; }
