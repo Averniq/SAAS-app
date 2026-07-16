@@ -14,7 +14,7 @@ const publicFiles = [
   "supabase-client.js",
   "supabase-config.js"
 ];
-const publicFolders = [];
+const publicFolders = ["assets"];
 
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });

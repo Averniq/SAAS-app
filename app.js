@@ -2242,7 +2242,7 @@ function renderSetup() {
         return `
         <article class="qr-card">
           <div class="qr-brand">
-            <img src="${escapeHtml(restaurant().logoData || DEFAULT_LOGO_DATA)}" alt="${escapeHtml(restaurant().name)} logo">
+            <img src="${escapeHtml(restaurant().logoFullData || restaurant().logoData || DEFAULT_LOGO_DATA)}" alt="${escapeHtml(restaurant().name)} logo">
             <span>${escapeHtml(restaurant().name)}</span>
           </div>
           <canvas class="qr-canvas" width="220" height="220" data-qr-table="${table.id}" aria-label="QR code for ${escapeHtml(table.name)}"></canvas>
@@ -2493,7 +2493,7 @@ function renderQrPrintCard(table, qrDataUrl) {
   const profile = restaurant();
   return `
     <article class="print-qr-card">
-      <img class="print-qr-logo" src="${escapeHtml(profile.logoData || DEFAULT_LOGO_DATA)}" alt="${escapeHtml(profile.name)} logo">
+      <img class="print-qr-logo" src="${escapeHtml(profile.logoFullData || profile.logoData || DEFAULT_LOGO_DATA)}" alt="${escapeHtml(profile.name)} logo">
       <h2>${escapeHtml(profile.name)}</h2>
       <p class="print-qr-subtitle">Japanese QR table ordering</p>
       <img class="print-qr-image" src="${qrDataUrl}" alt="QR code for ${escapeHtml(table.name)}">
@@ -2698,7 +2698,8 @@ function cloudProfilePayload(profile) {
       primaryColor: profile.primaryColor,
       menuLayout: profile.menuLayout,
       showPhotos: profile.showPhotos,
-      logoWatermarkData: profile.logoWatermarkData
+      logoWatermarkData: profile.logoWatermarkData,
+      logoFullData: profile.logoFullData || ""
     }
   };
 }
