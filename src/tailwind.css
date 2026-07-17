@@ -475,13 +475,19 @@
   .table-admin-row { @apply grid items-center gap-3 border-b py-3; grid-template-columns: minmax(0,1fr) auto; }
   .table-admin-row .muted { overflow-wrap: anywhere; }
 
-  .qr-sheet { @apply mt-4 grid gap-3; grid-template-columns: repeat(auto-fill,minmax(165px,1fr)); }
-  .qr-card { @apply grid justify-items-center gap-2 rounded-lg border bg-white p-3 shadow-sm; }
+  /* Each card must accommodate the 224px scan-safe QR canvas plus its padding. */
+  .qr-sheet { @apply mt-4 grid gap-3; grid-template-columns: repeat(auto-fit,minmax(256px,1fr)); }
+  .qr-card { @apply grid min-w-0 justify-items-center gap-2 rounded-lg border bg-white p-3 shadow-sm; }
   .qr-brand { @apply flex min-w-0 items-center gap-2 text-xs font-extrabold uppercase tracking-wide; color: var(--accent-dark); }
   .qr-brand img { @apply h-8 w-8 object-contain; }
   .qr-instruction { @apply text-center text-xs font-semibold text-muted; }
   .qr-canvas { @apply h-56 w-56 rounded-md border bg-white p-2; image-rendering: pixelated; }
   .qr-actions { @apply flex flex-wrap justify-center gap-2; }
+
+  @media (max-width: 400px) {
+    .qr-sheet { grid-template-columns: minmax(0, 1fr); }
+    .qr-canvas { max-width: 100%; height: auto; aspect-ratio: 1; }
+  }
 
   .modal-backdrop { @apply fixed inset-0 z-50 grid place-items-center bg-black/45 p-4; }
   .hidden { display: none; }
