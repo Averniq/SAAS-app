@@ -88,12 +88,12 @@
 
   .brand-lockup { @apply flex min-w-0 items-center gap-3; }
   .brand-logo {
-    @apply grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-lg border text-sm font-black;
+    @apply grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border text-sm font-black;
     background: #fffdf8;
     color: var(--accent-dark);
     border-color: rgba(255,255,255,.28);
   }
-  .brand-logo img { @apply h-full w-full object-contain p-1; }
+  .brand-logo img { @apply h-full w-full object-contain p-0; }
   .header-actions { @apply flex items-center justify-end gap-2; }
   .header-login-button { @apply border-white/20 bg-white/10 text-white hover:bg-white/15; }
   .sound-toggle { @apply min-w-[88px] border-white/20 bg-white/10 px-3 text-white hover:bg-white/15; }
@@ -121,7 +121,7 @@
   .app-header .eyebrow { color: rgba(255,250,240,.62); }
 
   .tabs {
-    @apply sticky top-[81px] z-30 grid grid-cols-5 gap-1 border-b px-4 py-2 md:px-8;
+    @apply sticky top-[97px] z-30 grid grid-cols-5 gap-1 border-b px-4 py-2 md:px-8;
     background: rgba(255, 253, 248, 0.96);
     backdrop-filter: blur(16px);
   }
@@ -563,6 +563,7 @@
 @media (max-width: 640px) {
   .app-header { @apply items-start; }
   .brand-logo { @apply h-10 w-10; }
+  body[data-staff-role="customer"] .app-header .brand-logo { @apply h-11 w-11 rounded-[10px]; }
   .header-actions { @apply flex-wrap; }
   .tabs { @apply top-[89px] grid-cols-3; }
   .tabs.customer-tabs-only { grid-template-columns: 1fr; }

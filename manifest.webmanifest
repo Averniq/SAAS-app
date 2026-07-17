@@ -11,5 +11,9 @@
   "background_color": "#181513",
   "theme_color": "#181513",
   "categories": ["food", "business"],
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "icons": [
+    {"src":"/assets/brand/sake-street-logo-mark.png","sizes":"512x512","type":"image/png","purpose":"any maskable"},
+    {"src":"/assets/brand/sake-street-logo-mark.webp","sizes":"512x512","type":"image/webp","purpose":"any"}
+  ]
 }

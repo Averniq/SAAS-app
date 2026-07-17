@@ -1,7 +1,7 @@
 const APP_ROUTE = window.TableOrderCloud?.routeContext?.() || { area: "app", restaurantSlug: "", tableRef: "" };
 const STORAGE_KEY = `aveniq-restaurant-state:${APP_ROUTE.restaurantSlug || "onboarding"}`;
 const SOUND_STORAGE_KEY = "tableorder-kitchen-sound";
-const STYLE_VERSION = "japanese-logo-cards-v3";
+const STYLE_VERSION = "sake-street-brand-assets-v1";
 const MENU_VERSION = "aveniq-sample-menu-v1";
 
 const DEFAULT_LOGO_SVG = `
@@ -18,6 +18,9 @@ const DEFAULT_LOGO_SVG = `
   <path d="M624 128c44 18 83 45 111 77" fill="none" stroke="#151312" stroke-width="14" stroke-linecap="round" opacity=".8"/>
 </svg>`;
 
+const SAKE_STREET_LOGO_MARK = "/assets/brand/sake-street-logo-mark.webp";
+const SAKE_STREET_LOGO_ROUND = "/assets/brand/sake-street-logo-round.webp";
+const SAKE_STREET_LOGO_FULL = "/assets/brand/sake-street-logo-full.webp";
 const DEFAULT_LOGO_DATA = "";
 const DEFAULT_LOGO_WATERMARK = "";
 
@@ -117,6 +120,11 @@ const defaultRestaurant = {
   taxRate: 10,
   isOpen: true,
   logoData: DEFAULT_LOGO_DATA,
+  logoMarkData: "",
+  logoRoundData: "",
+  logoFullData: "",
+  faviconData: "",
+  headerBackgroundColor: "",
   logoWatermarkData: DEFAULT_LOGO_WATERMARK,
   themePreset: "classic",
   primaryColor: "#c7472c",
@@ -491,6 +499,27 @@ function restaurant() {
   return { ...defaultRestaurant, ...(state.restaurant || {}) };
 }
 
+function isSakeStreetBrand(profile) {
+  return profile.slug === "sake-street" || profile.logoData === SAKE_STREET_LOGO_MARK;
+}
+
+function headerLogoFor(profile) {
+  if (profile.logoData === SAKE_STREET_LOGO_MARK) return SAKE_STREET_LOGO_ROUND;
+  return profile.logoRoundData || profile.logo_round_url || profile.logoData || "";
+}
+
+function fullLogoFor(profile) {
+  if (profile.logoFullData || profile.logo_full_url) return profile.logoFullData || profile.logo_full_url;
+  return isSakeStreetBrand(profile) ? SAKE_STREET_LOGO_FULL : profile.logoData || "";
+}
+
+function applyBrandDocumentAssets(profile) {
+  const favicon = profile.faviconData || profile.favicon_url || profile.logoMarkData || profile.logo_mark_url || (isSakeStreetBrand(profile) ? SAKE_STREET_LOGO_MARK : profile.logoData);
+  if (!favicon) return;
+  document.getElementById("tenantFavicon")?.setAttribute("href", favicon);
+  document.getElementById("tenantAppleTouchIcon")?.setAttribute("href", favicon);
+}
+
 function currentTheme() {
   const profile = restaurant();
   return themePresets[profile.themePreset] || themePresets.classic;
@@ -511,12 +540,13 @@ function applyTheme() {
   root.style.setProperty("--line", theme.line || "#dde4e8");
   root.style.setProperty("--muted", theme.muted || "#66727a");
   root.style.setProperty("--ink", theme.ink);
-  root.style.setProperty("--header-bg", theme.headerBg || "#ffffff");
+  root.style.setProperty("--header-bg", profile.headerBackgroundColor || profile.header_background_color || theme.headerBg || "#ffffff");
   root.style.setProperty("--header-ink", theme.headerInk || theme.ink);
   const watermark = profile.logoWatermarkData || profile.logoData;
   root.style.setProperty("--logo-watermark", watermark ? `url("${watermark}")` : "none");
 
   document.body.dataset.themePreset = profile.themePreset || "classic";
+  applyBrandDocumentAssets(profile);
   document.body.dataset.menuLayout = profile.menuLayout || "grid";
   document.body.classList.toggle("hide-menu-photos", !profile.showPhotos);
 }
@@ -2262,7 +2292,7 @@ function renderSetup() {
         return `
         <article class="qr-card">
           <div class="qr-brand">
-            <img src="${escapeHtml(restaurant().logoFullData || restaurant().logoData || DEFAULT_LOGO_DATA)}" alt="${escapeHtml(restaurant().name)} logo">
+            <img src="${escapeHtml(fullLogoFor(restaurant()))}" alt="${escapeHtml(restaurant().name)} logo">
             <span>${escapeHtml(restaurant().name)}</span>
           </div>
           <canvas class="qr-canvas" width="640" height="640" data-qr-table="${table.id}" aria-label="QR code for ${escapeHtml(table.name)}"></canvas>
@@ -2513,7 +2543,7 @@ function renderQrPrintCard(table, qrDataUrl) {
   const profile = restaurant();
   return `
     <article class="print-qr-card">
-      <img class="print-qr-logo" src="${escapeHtml(profile.logoFullData || profile.logoData || DEFAULT_LOGO_DATA)}" alt="${escapeHtml(profile.name)} logo">
+      <img class="print-qr-logo" src="${escapeHtml(fullLogoFor(profile))}" alt="${escapeHtml(profile.name)} logo">
       <h2>${escapeHtml(profile.name)}</h2>
       <p class="print-qr-subtitle">Japanese QR table ordering</p>
       <img class="print-qr-image" src="${qrDataUrl}" alt="QR code for ${escapeHtml(table.name)}">
@@ -2545,8 +2575,9 @@ function renderBrand() {
   document.getElementById("openStatus").className = `status-pill ${profile.isOpen ? "ready" : ""}`;
 
   const logo = document.getElementById("brandLogo");
-  if (profile.logoData) {
-    logo.innerHTML = `<img src="${profile.logoData}" alt="${escapeHtml(profile.name)} logo">`;
+  const headerLogo = headerLogoFor(profile);
+  if (headerLogo) {
+    logo.innerHTML = `<img src="${headerLogo}" alt="${escapeHtml(profile.name)} logo">`;
   } else {
     logo.textContent = profile.name
       .split(/\s+/)
@@ -2719,7 +2750,16 @@ function cloudProfilePayload(profile) {
       menuLayout: profile.menuLayout,
       showPhotos: profile.showPhotos,
       logoWatermarkData: profile.logoWatermarkData,
-      logoFullData: profile.logoFullData || ""
+      logoFullData: profile.logoFullData || "",
+      logoMarkData: profile.logoMarkData || "",
+      logoRoundData: profile.logoRoundData || "",
+      faviconData: profile.faviconData || "",
+      headerBackgroundColor: profile.headerBackgroundColor || "",
+      logo_mark_url: profile.logoMarkData || profile.logo_mark_url || "",
+      logo_round_url: profile.logoRoundData || profile.logo_round_url || "",
+      logo_full_url: profile.logoFullData || profile.logo_full_url || "",
+      favicon_url: profile.faviconData || profile.favicon_url || "",
+      header_background_color: profile.headerBackgroundColor || profile.header_background_color || ""
     }
   };
 }

@@ -3,9 +3,12 @@ const RUNTIME_CACHE = "aveniq-runtime-v17";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/manifest.webmanifest",
-  "/styles.css?v=20260716-4",
-  "/app.js?v=20260716-4"
+  "/manifest.webmanifest?v=20260717-2",
+  "/styles.css?v=20260717-2",
+  "/app.js?v=20260717-2",
+  "/assets/brand/sake-street-logo-mark.png",
+  "/assets/brand/sake-street-logo-round.webp",
+  "/assets/brand/sake-street-logo-full.webp"
 ];
 
 self.addEventListener("install", (event) => {
