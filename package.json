@@ -22,6 +22,7 @@
   "dependencies": {
     "@capacitor/android": "^8.4.1",
     "@capacitor/core": "^8.4.1",
-    "@capacitor/ios": "^8.4.1"
+    "@capacitor/ios": "^8.4.1",
+    "qrcode-generator": "1.4.4"
   }
 }

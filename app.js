@@ -978,20 +978,30 @@ function drawQrVersion(modules, reserved, size, version) {
 }
 
 function drawQrCanvas(canvas, text) {
-  const modules = createQrCode(text);
-  const size = modules.length;
-  const scale = Math.floor(canvas.width / (size + 8));
-  const qrSize = scale * (size + 8);
-  const offset = Math.floor((canvas.width - qrSize) / 2) + scale * 4;
+  if (typeof window.qrcode !== "function") {
+    throw new Error("QR generator failed to load. Please refresh and try again.");
+  }
+
+  // qrcode-generator selects the smallest valid QR version automatically.
+  // Level M plus a four-module quiet zone is reliable for screen, PNG and print.
+  const qr = window.qrcode(0, "M");
+  qr.addData(text, "Byte");
+  qr.make();
+
+  const size = qr.getModuleCount();
+  const quietZone = 4;
+  const scale = Math.max(1, Math.floor(canvas.width / (size + quietZone * 2)));
+  const qrSize = scale * (size + quietZone * 2);
+  const offset = Math.floor((canvas.width - qrSize) / 2) + scale * quietZone;
   const context = canvas.getContext("2d");
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.fillStyle = "#111111";
-  modules.forEach((row, y) => {
-    row.forEach((dark, x) => {
-      if (dark) context.fillRect(offset + x * scale, offset + y * scale, scale, scale);
-    });
-  });
+  for (let row = 0; row < size; row += 1) {
+    for (let col = 0; col < size; col += 1) {
+      if (qr.isDark(row, col)) context.fillRect(offset + col * scale, offset + row * scale, scale, scale);
+    }
+  }
 }
 
 function staffCanAccess(view) {
@@ -2255,7 +2265,7 @@ function renderSetup() {
             <img src="${escapeHtml(restaurant().logoFullData || restaurant().logoData || DEFAULT_LOGO_DATA)}" alt="${escapeHtml(restaurant().name)} logo">
             <span>${escapeHtml(restaurant().name)}</span>
           </div>
-          <canvas class="qr-canvas" width="220" height="220" data-qr-table="${table.id}" aria-label="QR code for ${escapeHtml(table.name)}"></canvas>
+          <canvas class="qr-canvas" width="640" height="640" data-qr-table="${table.id}" aria-label="QR code for ${escapeHtml(table.name)}"></canvas>
           <strong>${escapeHtml(table.name)}</strong>
           <p class="qr-instruction">Scan to order at your table</p>
           <p class="muted">${escapeHtml(table.token)}</p>
