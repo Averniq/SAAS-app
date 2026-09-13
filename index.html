@@ -9,10 +9,10 @@
     <meta name="apple-mobile-web-app-title" content="Aveniq" />
     <meta name="format-detection" content="telephone=no" />
     <title>Aveniq Restaurant Ordering</title>
-    <link rel="manifest" href="/manifest.webmanifest?v=20260717-2" />
+    <link rel="manifest" href="/manifest.webmanifest?v=20260911-1" />
     <link id="tenantFavicon" rel="icon" href="/assets/brand/sake-street-logo-mark.webp" type="image/webp" />
     <link id="tenantAppleTouchIcon" rel="apple-touch-icon" href="/assets/brand/sake-street-logo-mark.png" />
-    <link rel="stylesheet" href="/styles.css?v=20260717-2" />
+    <link rel="stylesheet" href="/styles.css?v=20260911-1" />
   </head>
   <body>
     <section class="account-gateway hidden" id="accountGateway" aria-live="polite">
@@ -252,7 +252,7 @@
               <span>Total</span>
               <strong id="cartTotal">$0.00</strong>
             </div>
-            <button class="submit-button" id="submitOrder">Send to Kitchen</button>
+            <button class="submit-button" id="submitOrder">Review Order</button>
             <div class="order-confirmation hidden" id="orderConfirmation" aria-live="polite"></div>
           </aside>
         </div>
@@ -600,6 +600,26 @@
       </section>
     </div>
 
+    <div class="modal-backdrop hidden" id="reviewOrderModal" role="dialog" aria-modal="true" aria-labelledby="reviewOrderTitle">
+      <section class="option-modal">
+        <div class="panel-title">
+          <div>
+            <p class="eyebrow">Review order</p>
+            <h2 id="reviewOrderTitle">Ready to send?</h2>
+          </div>
+          <strong id="reviewOrderTotal">$0.00</strong>
+        </div>
+        <div class="cart-list" id="reviewOrderItems"></div>
+        <p class="muted" id="reviewOrderNote"></p>
+        <div class="totals"><span>Items total</span><strong id="reviewOrderSubtotal">$0.00</strong></div>
+        <div class="totals compact-total"><span>GST included</span><strong id="reviewOrderGst">$0.00</strong></div>
+        <div class="modal-actions">
+          <button class="submit-button" id="confirmReviewOrder" type="button">Confirm &amp; Send to Kitchen</button>
+          <button class="ghost-button" id="cancelReviewOrder" type="button">Back to cart</button>
+        </div>
+      </section>
+    </div>
+
     <div class="modal-backdrop hidden" id="staffAuthModal" role="dialog" aria-modal="true" aria-labelledby="staffAuthTitle">
       <section class="staff-auth-modal">
         <div class="auth-brand">
@@ -631,10 +651,10 @@
       <section class="print-page"></section>
     </template>
 
-    <script src="/mobile-shell.js?v=20260703-1"></script>
-    <script src="/supabase-config.js?v=20260703-1"></script>
-    <script src="/supabase-client.js?v=20260716-1"></script>
-    <script src="/vendor/qrcode.js?v=20260717-1"></script>
-    <script src="/app.js?v=20260717-2"></script>
+    <script src="/mobile-shell.js?v=20260911-1"></script>
+    <script src="/supabase-config.js?v=20260911-1"></script>
+    <script src="/supabase-client.js?v=20260911-1"></script>
+    <script src="/vendor/qrcode.js?v=20260911-1"></script>
+    <script src="/app.js?v=20260911-1"></script>
   </body>
 </html>

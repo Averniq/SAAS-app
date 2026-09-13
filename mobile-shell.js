@@ -23,6 +23,7 @@
   const isNative = Boolean(
     capacitor && typeof capacitor.isNativePlatform === "function" && capacitor.isNativePlatform()
   );
+  const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
   const isStandalone =
     window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 
@@ -32,6 +33,37 @@
   }
 
   if (isNative || !("serviceWorker" in navigator)) {
+    return;
+  }
+
+  async function retireLocalPreviewServiceWorker() {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(
+      registrations
+        .filter((registration) => {
+          const scope = new URL(registration.scope);
+          const worker = registration.active || registration.waiting || registration.installing;
+          const workerPath = worker ? new URL(worker.scriptURL).pathname : "";
+          return scope.origin === window.location.origin && scope.pathname === "/" && workerPath === "/service-worker.js";
+        })
+        .map((registration) => registration.unregister())
+    );
+    const cacheNames = await caches.keys();
+    await Promise.all(
+      cacheNames
+        .filter((name) => /^aveniq-(shell|runtime)-/.test(name))
+        .map((name) => caches.delete(name))
+    );
+  }
+
+  if (isNative || isLocalhost) {
+    if (isLocalhost) {
+      window.addEventListener("load", () => {
+        retireLocalPreviewServiceWorker().catch(() => {
+          // A failed cleanup must not block the local preview itself.
+        });
+      });
+    }
     return;
   }
 

@@ -1,8 +1,10 @@
 const APP_ROUTE = window.TableOrderCloud?.routeContext?.() || { area: "app", restaurantSlug: "", tableRef: "" };
 const STORAGE_KEY = `aveniq-restaurant-state:${APP_ROUTE.restaurantSlug || "onboarding"}`;
+const PUBLIC_ORDER_DRAFT_STORAGE_PREFIX = "aveniq-public-order:";
 const SOUND_STORAGE_KEY = "tableorder-kitchen-sound";
 const STYLE_VERSION = "sake-street-brand-assets-v1";
 const MENU_VERSION = "aveniq-sample-menu-v1";
+function isAuthenticatedDashboardRoute() { return ["dashboard", "kitchen", "frontdesk", "reports", "setup"].includes(APP_ROUTE.area); }
 
 const DEFAULT_LOGO_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520">
@@ -308,11 +310,15 @@ defaultMenuItems.splice(
   defaultMenuItem("vanilla_mochi", "Dessert", "Vanilla mochi", 7, "Two pieces.", [], 1)
 );
 
-let state = loadState();
+let state = ["order", "legacy-order"].includes(APP_ROUTE.area) || isAuthenticatedDashboardRoute() ? { selectedTableId: "", cart: [], orders: [], soldOutIds: [], menuItems: [], menuVersion: MENU_VERSION, restaurant: { ...defaultRestaurant, name: "Loading…", isOpen: false }, tables: [] } : loadState();
+let dashboardCatalogueState = isAuthenticatedDashboardRoute() ? "loading" : "ready";
 let activeView = "customer";
 let activeCategory = "All";
 let lockedTableToken = tableTokenFromUrl();
 let selectedTableId = tableIdFromUrl() || (lockedTableToken ? "" : state.selectedTableId) || "t6";
+let publicOrderIdempotencyKey = "";
+let publicOrderDraftRestored = false;
+let publicOrderSubmissionInProgress = false;
 let selectedFrontTableId = selectedTableId;
 let soundEnabled = loadSoundPreference();
 let kitchenAudioContext = null;
@@ -349,10 +355,10 @@ const CUSTOMER_ORDER_STEPS = [
 ];
 
 const STAFF_VIEW_ROLES = {
-  kitchen: ["owner", "manager", "staff", "kitchen"],
-  frontdesk: ["owner", "manager", "staff", "cashier"],
-  reports: ["owner", "manager"],
-  setup: ["owner", "manager"]
+  kitchen: ["owner", "manager", "staff", "kitchen", "platform_admin"],
+  frontdesk: ["owner", "manager", "staff", "cashier", "platform_admin"],
+  reports: ["owner", "manager", "platform_admin"],
+  setup: ["owner", "manager", "platform_admin"]
 };
 
 const STAFF_ROLE_LABELS = {
@@ -360,7 +366,8 @@ const STAFF_ROLE_LABELS = {
   manager: "Manager",
   staff: "All-round Staff",
   kitchen: "Kitchen",
-  cashier: "Cashier"
+  cashier: "Cashier",
+  platform_admin: "Platform admin"
 };
 
 const samplePhotoUrls = {
@@ -413,6 +420,11 @@ function loadState() {
 }
 
 function saveState() {
+  if (isCanonicalPublicOrderRoute()) {
+    persistPublicOrderDraft();
+    return;
+  }
+  if (["order", "legacy-order"].includes(APP_ROUTE.area)) return;
   state.selectedTableId = selectedTableId;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -475,16 +487,6 @@ function normalizePhotoUrl(value) {
   } catch {
     return "";
   }
-}
-
-function tenantMenuPhotoFallback(profile, item) {
-  if (profile?.slug !== "sake-street") return "";
-  const fallbackPhotos = {
-    "Miso soup": "/assets/menu-photos/miso-soup.webp",
-    "Karaage ramen": "/assets/menu-photos/karaage-ramen.webp",
-    "Spicy edamame": "/assets/menu-photos/spicy-edamame.webp"
-  };
-  return fallbackPhotos[item?.name] || "";
 }
 
 function allMenuItems() {
@@ -579,6 +581,7 @@ function currentTable() {
 
 function lockedTableFromCurrentData() {
   if (!lockedTableToken) return null;
+  if (APP_ROUTE.area === "order") return allTables()[0] || null;
   return allTables().find((table) => table.token === lockedTableToken || table.id === lockedTableToken) || null;
 }
 
@@ -684,6 +687,8 @@ function addToCart(itemId, options = []) {
     });
   }
 
+  if (isCanonicalPublicOrderRoute() && !isValidPublicOrderIdempotencyKey(publicOrderIdempotencyKey)) publicOrderIdempotencyKey = createPublicOrderIdempotencyKey();
+
   saveState();
   renderCart();
 }
@@ -713,7 +718,65 @@ function orderTotal(order) {
 }
 
 function tableTokenFromUrl() {
-  return window.TableOrderCloud?.routeContext?.().tableRef || new URLSearchParams(window.location.search).get("table") || "";
+  return window.TableOrderCloud?.routeContext?.().token || "";
+}
+
+function isCanonicalPublicOrderRoute() {
+  return APP_ROUTE.area === "order" && Boolean(lockedTableToken);
+}
+
+function publicOrderDraftStorageKey() {
+  return `${PUBLIC_ORDER_DRAFT_STORAGE_PREFIX}${lockedTableToken}`;
+}
+
+function createPublicOrderIdempotencyKey() {
+  const randomUuid = crypto.randomUUID?.();
+  if (randomUuid) return randomUuid;
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  return [...bytes].map((byte, index) => `${[4, 6, 8, 10].includes(index) ? "-" : ""}${byte.toString(16).padStart(2, "0")}`).join("");
+}
+
+function isValidPublicOrderIdempotencyKey(value) {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function publicOrderDraftNote() {
+  return document.getElementById("orderNote")?.value || "";
+}
+
+function persistPublicOrderDraft() {
+  if (!isCanonicalPublicOrderRoute()) return;
+  if (!state.cart.length) {
+    sessionStorage.removeItem(publicOrderDraftStorageKey());
+    return;
+  }
+  if (!isValidPublicOrderIdempotencyKey(publicOrderIdempotencyKey)) publicOrderIdempotencyKey = createPublicOrderIdempotencyKey();
+  sessionStorage.setItem(publicOrderDraftStorageKey(), JSON.stringify({ cart: state.cart, note: publicOrderDraftNote(), idempotencyKey: publicOrderIdempotencyKey }));
+}
+
+function restorePublicOrderDraft() {
+  if (!isCanonicalPublicOrderRoute() || publicOrderDraftRestored) return;
+  publicOrderDraftRestored = true;
+  try {
+    const draft = JSON.parse(sessionStorage.getItem(publicOrderDraftStorageKey()) || "null");
+    if (!draft || !Array.isArray(draft.cart)) return;
+    state.cart = draft.cart;
+    const noteInput = document.getElementById("orderNote");
+    if (noteInput) noteInput.value = String(draft.note || "");
+    publicOrderIdempotencyKey = draft.idempotencyKey;
+    if (!state.cart.length) return;
+    if (!isValidPublicOrderIdempotencyKey(publicOrderIdempotencyKey)) publicOrderIdempotencyKey = createPublicOrderIdempotencyKey();
+    persistPublicOrderDraft();
+  } catch {
+    // A corrupt customer draft must not prevent the canonical token page from loading.
+  }
+}
+
+function clearPublicOrderDraft() {
+  if (!isCanonicalPublicOrderRoute()) return;
+  sessionStorage.removeItem(publicOrderDraftStorageKey());
 }
 
 function tableIdFromUrl() {
@@ -723,22 +786,39 @@ function tableIdFromUrl() {
   return match?.id || "";
 }
 
-function tableOrderingLink(table) {
+const issuedQrUrls = new Map();
+
+function orderingTokenUrl(token) {
   const url = new URL(window.location.href);
-  const slug = restaurant().slug || staffUser?.restaurantSlug || APP_ROUTE.restaurantSlug || window.TableOrderCloud?.config?.restaurantSlug || "restaurant";
-  url.pathname = `/order/${encodeURIComponent(slug)}/${encodeURIComponent(table.id)}`;
+  url.pathname = `/order/${encodeURIComponent(token)}`;
   url.search = "";
   url.hash = "";
   return url.toString();
 }
 
-function makeToken() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let token = "tk_";
-  for (let index = 0; index < 8; index += 1) {
-    token += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return token;
+function issuedQrUrl(table) { return issuedQrUrls.get(table.id) || ""; }
+
+function hasUnrecoverablePublicQrToken(table) {
+  return Boolean(table?.hasActivePublicQrToken && !issuedQrUrl(table));
+}
+
+function qrCardStatus(table) {
+  if (issuedQrUrl(table)) return "QR ready for this session.";
+  if (hasUnrecoverablePublicQrToken(table)) return "An active QR/link exists, but its plaintext is not recoverable after reload.";
+  return "Generate a customer QR when you are ready.";
+}
+
+function qrCardActionLabel(table) {
+  return issuedQrUrl(table) || hasUnrecoverablePublicQrToken(table) ? "Regenerate / Rotate QR" : "Generate QR / Ordering Link";
+}
+
+async function issueQrForTable(table, { rotate = false } = {}) {
+  if (!table?.cloudId || !staffUser?.restaurantId || !window.TableOrderCloud?.issuePublicQrTableToken) throw new Error("A cloud-connected owner or manager session is required to generate a QR code.");
+  if (rotate && !window.confirm("Regenerate this QR? The previous customer QR/link will stop working.")) return "";
+  const result = await window.TableOrderCloud.issuePublicQrTableToken(staffUser.restaurantId, table.cloudId, null);
+  const url = orderingTokenUrl(result.token);
+  issuedQrUrls.set(table.id, url);
+  return url;
 }
 
 const qrMath = (() => {
@@ -1363,10 +1443,10 @@ function setView(view, options = {}) {
     panel.classList.toggle("active-view", panel.id === view);
   });
   render();
-  if (view === "setup" && staffUser && ["owner", "manager"].includes(staffUser.role)) {
+  if (view === "setup" && staffUser && ["owner", "manager", "platform_admin"].includes(staffUser.role)) {
     loadRestaurantTeam();
   }
-  if (view === "reports" && staffUser && ["owner", "manager"].includes(staffUser.role)) {
+  if (view === "reports" && staffUser && ["owner", "manager", "platform_admin"].includes(staffUser.role)) {
     window.setTimeout(() => loadReports({ refreshDashboard: true }), 0);
   }
   if (staffUser && options.updateUrl !== false && STAFF_VIEW_ROLES[view]) {
@@ -1396,7 +1476,7 @@ function renderTablePicker() {
 
   picker.classList.remove("hidden");
   picker.disabled = false;
-  if (!allTables().some((table) => table.id === selectedTableId)) selectedTableId = allTables()[0].id;
+  if (!allTables().some((table) => table.id === selectedTableId)) selectedTableId = allTables()[0]?.id || "";
   picker.value = selectedTableId;
   picker.onchange = (event) => {
     selectedTableId = event.target.value;
@@ -1404,7 +1484,7 @@ function renderTablePicker() {
     saveState();
     render();
   };
-  document.getElementById("customerTableName").textContent = currentTable().name;
+  document.getElementById("customerTableName").textContent = currentTable()?.name || "Link unavailable";
 }
 
 function renderCategories() {
@@ -1431,6 +1511,10 @@ function renderCategories() {
 
 function renderMenu() {
   const grid = document.getElementById("menuGrid");
+  if (isAuthenticatedDashboardRoute() && dashboardCatalogueState !== "ready") {
+    grid.innerHTML = `<div class="empty-state">${dashboardCatalogueState === "loading" ? "Dashboard catalogue loading…" : "Dashboard catalogue unavailable. Reload to try the authenticated restaurant catalogue again."}</div>`;
+    return;
+  }
   const profile = restaurant();
   const items = allMenuItems().filter((item) => activeCategory === "All" || item.category === activeCategory);
   grid.innerHTML = items
@@ -1440,7 +1524,7 @@ function renderMenu() {
         .map((tag) => `<span class="tag ${tag === "Hot" ? "hot" : tag === "Chef" ? "soft" : ""}">${escapeHtml(tag)}</span>`)
         .join("");
       const optionLabel = item.optionTemplate && item.optionTemplate !== "none" ? `<span class="tag soft">${escapeHtml(optionTemplateLabel(item.optionTemplate))}</span>` : "";
-      const photoUrl = normalizePhotoUrl(item.photoData) || tenantMenuPhotoFallback(profile, item);
+      const photoUrl = normalizePhotoUrl(item.photoData);
       const photo = photoUrl
         ? `<div class="food-photo custom-photo" style="background-image: url('${escapeHtml(photoUrl)}')" role="img" aria-label="${escapeHtml(item.name)}"></div>`
         : `<div class="food-photo ${item.photo}" role="img" aria-label="${escapeHtml(item.name)}"></div>`;
@@ -1531,7 +1615,7 @@ function renderCart() {
   document.getElementById("cartGst").textContent = money(cartTax());
   document.getElementById("cartTotal").textContent = money(cartTotal());
   document.getElementById("submitOrder").disabled = !profile.isOpen || !entries.length;
-  document.getElementById("submitOrder").textContent = profile.isOpen ? "Send to Kitchen" : "Ordering Closed";
+  document.getElementById("submitOrder").textContent = profile.isOpen ? "Review Order" : "Ordering Closed";
   renderMobileCustomerControls(entries);
   renderOrderConfirmation();
   list.querySelectorAll("[data-inc]").forEach((button) => {
@@ -1586,6 +1670,38 @@ function renderOrderConfirmation() {
     renderCart();
     document.getElementById("categoryRow").scrollIntoView({ behavior: "smooth", block: "start" });
   });
+}
+
+function closeReviewOrder() {
+  document.getElementById("reviewOrderModal").classList.add("hidden");
+}
+
+function renderReviewOrder(entries, note) {
+  document.getElementById("reviewOrderItems").innerHTML = entries
+    .map(({ item, quantity, options, unitPrice }) => `
+      <div class="cart-item">
+        <div>
+          <strong>${escapeHtml(item.name)}</strong>
+          <p class="muted">${escapeHtml(optionSummary(options) || "No options")}</p>
+          <p class="muted">${quantity} × ${money(unitPrice)}</p>
+        </div>
+        <strong>${money(unitPrice * quantity)}</strong>
+      </div>
+    `)
+    .join("");
+  document.getElementById("reviewOrderNote").textContent = note ? `Order note: ${note}` : "No order note.";
+  document.getElementById("reviewOrderSubtotal").textContent = money(cartSubtotal());
+  document.getElementById("reviewOrderGst").textContent = money(cartTax());
+  document.getElementById("reviewOrderTotal").textContent = money(cartTotal());
+}
+
+function openReviewOrder() {
+  if (!restaurant().isOpen) return;
+  const entries = cartEntries();
+  if (!entries.length) return;
+  const note = document.getElementById("orderNote").value.trim();
+  renderReviewOrder(entries, note);
+  document.getElementById("reviewOrderModal").classList.remove("hidden");
 }
 
 function trackedCustomerOrders() {
@@ -1737,22 +1853,36 @@ function startCustomerOrderStatusSync() {
 
 async function submitOrder() {
   if (!restaurant().isOpen) return;
+  const isPublicOrder = isCanonicalPublicOrderRoute();
+  if (isPublicOrder && publicOrderSubmissionInProgress) return;
+  const entries = cartEntries();
+  if (!entries.length) return;
+  if (isPublicOrder) publicOrderSubmissionInProgress = true;
+  closeReviewOrder();
   if (lockedTableToken && !applyLockedTableSelection()) {
-    await loadCloudDataIntoApp({ silent: true });
+    try {
+      await loadCloudDataIntoApp({ silent: true });
+    } catch (error) {
+      if (isPublicOrder) publicOrderSubmissionInProgress = false;
+      console.error("Cloud table refresh failed:", error);
+      showOrderToast(`Cloud delivery failed: ${error.message}`, "warning");
+      return;
+    }
     if (!applyLockedTableSelection()) {
+      if (isPublicOrder) publicOrderSubmissionInProgress = false;
       showOrderToast("This table link is not available. Please ask staff for a new QR code.", "warning");
       return;
     }
   }
-  const entries = cartEntries();
-  if (!entries.length) return;
   lastConfirmedOrderId = "";
 
   const total = cartTotal();
   const tax = cartTax();
   const subtotal = subtotalBeforeTax(total);
+  if (isPublicOrder && !isValidPublicOrderIdempotencyKey(publicOrderIdempotencyKey)) publicOrderIdempotencyKey = createPublicOrderIdempotencyKey();
   const order = {
     id: `ord_${Date.now()}`,
+    idempotencyKey: publicOrderIdempotencyKey,
     number: state.orders.length + 1001,
     tableId: selectedTableId,
     status: "New",
@@ -1776,11 +1906,13 @@ async function submitOrder() {
     }))
   };
 
-  state.orders.unshift(order);
-  state.cart = [];
-  document.getElementById("orderNote").value = "";
-  saveState();
-  renderCart();
+  if (!isPublicOrder) {
+    state.orders.unshift(order);
+    state.cart = [];
+    document.getElementById("orderNote").value = "";
+    saveState();
+    renderCart();
+  }
 
   try {
     if (!restaurant().cloudId || !allTables().find((entry) => entry.id === selectedTableId)?.cloudId) {
@@ -1793,14 +1925,27 @@ async function submitOrder() {
     if (cloudOrder.number) order.number = cloudOrder.number;
     order.cloudStatus = "synced";
     order.cloudError = "";
+    if (isCanonicalPublicOrderRoute()) {
+      state.orders.unshift(order);
+      state.cart = [];
+      document.getElementById("orderNote").value = "";
+      clearPublicOrderDraft();
+      publicOrderIdempotencyKey = "";
+    }
     lastConfirmedOrderId = order.id;
     showOrderSuccessModal(order);
     showOrderToast("Order sent to the kitchen.", "success");
   } catch (error) {
-    order.cloudStatus = "local";
-    order.cloudError = error.message;
+    if (!isPublicOrder) {
+      order.cloudStatus = "local";
+      order.cloudError = error.message;
+    }
     console.error("Cloud order delivery failed:", error);
-    showOrderToast(`Cloud delivery failed: ${error.message}`, "warning");
+    showOrderToast(isPublicOrder
+      ? "We could not confirm delivery. Your order may have reached the kitchen. Keep this cart unchanged and retry, or ask staff before creating a new order."
+      : `Cloud delivery failed: ${error.message}`, "warning");
+  } finally {
+    if (isPublicOrder) publicOrderSubmissionInProgress = false;
   }
 
   saveState();
@@ -2288,7 +2433,6 @@ function renderSetup() {
   document.getElementById("qrSheet").innerHTML = allTables()
     .map(
       (table) => {
-        const link = tableOrderingLink(table);
         return `
         <article class="qr-card">
           <div class="qr-brand">
@@ -2298,9 +2442,11 @@ function renderSetup() {
           <canvas class="qr-canvas" width="640" height="640" data-qr-table="${table.id}" aria-label="QR code for ${escapeHtml(table.name)}"></canvas>
           <strong>${escapeHtml(table.name)}</strong>
           <p class="qr-instruction">Scan to order at your table</p>
-          <p class="muted">${escapeHtml(table.token)}</p>
+          <p class="muted">${qrCardStatus(table)}</p>
+          ${hasUnrecoverablePublicQrToken(table) ? `<p class="muted">Regenerating will stop the previous QR/link from working.</p>` : ""}
           <div class="qr-actions">
-            <button class="ghost-button" data-copy-qr-table="${table.id}">Copy Link</button>
+            <button class="ghost-button" data-generate-qr-table="${table.id}">${qrCardActionLabel(table)}</button>
+            <button class="ghost-button" data-copy-qr-table="${table.id}" ${issuedQrUrl(table) ? "" : "disabled"}>Copy Link</button>
             <button class="ghost-button" data-download-qr="${table.id}">PNG</button>
           </div>
         </article>
@@ -2417,7 +2563,15 @@ function renderSetup() {
   document.querySelectorAll("[data-copy-qr-table]").forEach((button) => {
     button.addEventListener("click", () => {
       const table = allTables().find((entry) => entry.id === button.dataset.copyQrTable);
-      if (table) copyText(tableOrderingLink(table));
+      if (table && issuedQrUrl(table)) copyText(issuedQrUrl(table));
+    });
+  });
+  document.querySelectorAll("[data-generate-qr-table]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const table = allTables().find((entry) => entry.id === button.dataset.generateQrTable);
+      if (!table) return;
+      try { await issueQrForTable(table, { rotate: Boolean(issuedQrUrl(table) || table.hasActivePublicQrToken) }); renderSetup(); }
+      catch (error) { showOrderToast(`QR generation failed: ${error.message}`, "warning"); }
     });
   });
 
@@ -2435,11 +2589,11 @@ function renderTableAdmin() {
         <div class="table-admin-row">
           <div>
             <strong>${escapeHtml(table.name)}</strong>
-            <p class="muted">${escapeHtml(tableOrderingLink(table))}</p>
+            <p class="muted">${issuedQrUrl(table) ? "Current token QR is available in this session." : hasUnrecoverablePublicQrToken(table) ? "An active QR/link exists, but its plaintext is not recoverable after reload." : "No QR generated in this session."}</p>
           </div>
           <span class="status-buttons">
             <button class="ghost-button" data-copy-table="${table.id}">Copy</button>
-            <button class="ghost-button" data-reset-token="${table.id}">Reset Link</button>
+            <button class="ghost-button" data-reset-token="${table.id}">${qrCardActionLabel(table)}</button>
             <button class="ghost-button" data-delete-table="${table.id}" ${hasOpenOrders || allTables().length === 1 ? "disabled" : ""}>Delete</button>
           </span>
         </div>
@@ -2450,7 +2604,7 @@ function renderTableAdmin() {
   list.querySelectorAll("[data-copy-table]").forEach((button) => {
     button.addEventListener("click", () => {
       const table = allTables().find((entry) => entry.id === button.dataset.copyTable);
-      if (table) copyText(tableOrderingLink(table));
+      if (table && issuedQrUrl(table)) copyText(issuedQrUrl(table));
     });
   });
 
@@ -2458,22 +2612,8 @@ function renderTableAdmin() {
     button.addEventListener("click", async () => {
       const table = allTables().find((entry) => entry.id === button.dataset.resetToken);
       if (!table) return;
-      table.token = makeToken();
-      saveState();
-      render();
-
-      if (!table.cloudId || !window.TableOrderCloud?.updateRestaurantTable || !staffUser) {
-        showOrderToast(table.cloudId ? "Table link reset locally. Staff login is required for cloud sync." : "Table link reset locally.", "success");
-        return;
-      }
-
-      try {
-        await window.TableOrderCloud.updateRestaurantTable(table.cloudId, { table_token: table.token });
-        showOrderToast("Table link reset in cloud.", "success");
-        await loadCloudDataIntoApp({ silent: true });
-      } catch (error) {
-        showOrderToast(`Table link cloud save failed: ${error.message}`, "warning");
-      }
+      try { await issueQrForTable(table, { rotate: Boolean(issuedQrUrl(table) || table.hasActivePublicQrToken) }); renderTableAdmin(); }
+      catch (error) { showOrderToast(`QR rotation failed: ${error.message}`, "warning"); }
     });
   });
 
@@ -2488,7 +2628,8 @@ function renderQrCanvases() {
   document.querySelectorAll("[data-qr-table]").forEach((canvas) => {
     const table = allTables().find((entry) => entry.id === canvas.dataset.qrTable);
     if (!table) return;
-    drawQrCanvas(canvas, tableOrderingLink(table));
+    const url = issuedQrUrl(table);
+    if (url) drawQrCanvas(canvas, url);
   });
 }
 
@@ -2549,7 +2690,7 @@ function renderQrPrintCard(table, qrDataUrl) {
       <img class="print-qr-image" src="${qrDataUrl}" alt="QR code for ${escapeHtml(table.name)}">
       <h3>${escapeHtml(table.name)}</h3>
       <p>Scan to order from your table.</p>
-      <small>${escapeHtml(tableOrderingLink(table))}</small>
+      <small>${escapeHtml(issuedQrUrl(table) || "QR not generated")}</small>
     </article>
   `;
 }
@@ -2885,8 +3026,7 @@ async function addTable(event) {
 
   const table = {
     id: `table_${Date.now()}`,
-    name,
-    token: makeToken()
+    name
   };
 
   state.tables = [...allTables(), table];
@@ -3141,6 +3281,17 @@ async function checkDatabaseConnection() {
   `;
 
   try {
+    if (isAuthenticatedDashboardRoute()) {
+      if (!staffUser?.restaurantId) {
+        status.className = "database-status checking";
+        status.innerHTML = `<span class="status-dot"></span><div><strong>Waiting for authenticated restaurant context</strong><p class="muted">Dashboard catalogue loading has not started.</p></div>`;
+        return;
+      }
+      const cloud = await window.TableOrderCloud.loadRestaurantData();
+      status.className = "database-status connected";
+      status.innerHTML = `<span class="status-dot"></span><div><strong>Authenticated restaurant catalogue connected</strong><p class="muted">${cloud.menuItems.length} current menu items found.</p></div>`;
+      return;
+    }
     const restaurantRow = await window.TableOrderCloud.checkConnection();
     if (!restaurantRow) {
       status.className = "database-status warning";
@@ -3312,7 +3463,7 @@ function renderRestaurantTeam() {
 }
 
 async function loadRestaurantTeam() {
-  if (!staffUser?.restaurantId || !["owner", "manager"].includes(staffUser.role)) return;
+  if (!staffUser?.restaurantId || !["owner", "manager", "platform_admin"].includes(staffUser.role)) return;
   setRestaurantTeamError("");
   try {
     restaurantTeamData = await window.TableOrderCloud.listRestaurantTeam(staffUser.restaurantId);
@@ -3350,6 +3501,7 @@ async function loadCloudDataIntoApp(options = {}) {
   if (!silent) setDatabaseStatus("checking", "Loading cloud data...", "Local storage remains available as fallback.");
 
   try {
+    if (isAuthenticatedDashboardRoute()) { dashboardCatalogueState = "loading"; renderMenu(); }
     const cloud = await window.TableOrderCloud.loadRestaurantData();
     const currentProfile = restaurant();
     state.restaurant = {
@@ -3368,15 +3520,17 @@ async function loadCloudDataIntoApp(options = {}) {
       cloudId: cloud.restaurant.id
     };
 
+    const publicQrTokenMetadataByTableId = new Map((cloud.publicQrTokenMetadata || []).map((metadata) => [metadata.table_id, metadata]));
     state.tables = cloud.tables.map((table) => ({
-      id: table.local_id,
+      id: table.local_id || table.id,
       cloudId: table.id,
       name: table.table_name || table.name,
       number: table.table_number,
-      token: table.table_token
+      hasActivePublicQrToken: Boolean(publicQrTokenMetadataByTableId.get(table.id)?.has_active_token),
+      token: ""
     }));
     if (state.tables.length) {
-      const requestedToken = lockedTableToken || tableTokenFromUrl();
+      const requestedToken = APP_ROUTE.area === "order" ? "" : (lockedTableToken || tableTokenFromUrl());
       const requestedTable = requestedToken
         ? state.tables.find((table) => table.token === requestedToken || table.id === requestedToken)
         : null;
@@ -3385,10 +3539,14 @@ async function loadCloudDataIntoApp(options = {}) {
         selectedTableId = requestedTable.id;
         selectedFrontTableId = requestedTable.id;
       }
+      if (APP_ROUTE.area === "order") {
+        selectedTableId = state.tables[0].id;
+        selectedFrontTableId = selectedTableId;
+      }
     }
 
     state.menuItems = cloud.menuItems.map((item, index) => ({
-      id: item.local_id,
+      id: item.local_id || item.id,
       cloudId: item.id,
       category: item.category,
       name: item.name,
@@ -3403,7 +3561,9 @@ async function loadCloudDataIntoApp(options = {}) {
       soldOut: item.is_available === false || item.sold_out
     }));
     state.soldOutIds = cloud.menuItems.filter((item) => item.is_available === false || item.sold_out).map((item) => item.local_id);
+    if (isAuthenticatedDashboardRoute()) dashboardCatalogueState = "ready";
 
+    restorePublicOrderDraft();
     saveState();
     render();
     if (!silent) {
@@ -3415,6 +3575,7 @@ async function loadCloudDataIntoApp(options = {}) {
     }
     return true;
   } catch (error) {
+    if (isAuthenticatedDashboardRoute()) { dashboardCatalogueState = "error"; renderMenu(); }
     if (!silent) setDatabaseStatus("error", "Cloud load failed", error.message);
     return false;
   } finally {
@@ -3814,11 +3975,15 @@ async function continueOwnerSession() {
     const restaurantArea = ["dashboard", "kitchen", "frontdesk", "reports", "setup"].includes(route.area);
 
     if (restaurantArea && route.restaurantSlug) {
-      const profile = await window.TableOrderCloud.getStaffProfile();
+      const master = await window.TableOrderCloud.getPlatformProfile();
+      const profile = master
+        ? await window.TableOrderCloud.getPlatformDashboardProfile(route.restaurantSlug)
+        : await window.TableOrderCloud.getStaffProfile();
       staffUser = profile;
       onboardingRestaurant = { id: profile.restaurantId, slug: profile.restaurantSlug, name: profile.restaurantName };
       setGatewayVisible(false);
       await loadCloudDataIntoApp({ silent: true });
+      await checkDatabaseConnection();
       renderStaffSession();
       startCloudOrderSync();
       setView(route.area === "dashboard" ? "setup" : route.area, { updateUrl: false });
@@ -3874,7 +4039,7 @@ function renderPlatformRestaurants() {
         <p class="platform-address">${escapeHtml(entry.address || "No address added")}</p>
       </div>
       <div class="platform-card-actions">
-        <a class="ghost-button" href="/order/${encodeURIComponent(entry.slug)}/table-1" target="_blank" rel="noopener">Customer page</a>
+        <span class="muted">Generate a QR from the restaurant dashboard after selecting a table.</span>
         <a class="submit-button" href="/dashboard/${encodeURIComponent(entry.slug)}/dashboard" target="_blank" rel="noopener">Open dashboard</a>
       </div>
     </article>
@@ -4017,7 +4182,8 @@ function renderOnboardingQrCodes() {
   grid.innerHTML = allTables().map((table) => `<article class="onboarding-qr-card"><canvas width="180" height="180" data-onboarding-qr="${escapeHtml(table.id)}"></canvas><strong>${escapeHtml(table.name)}</strong><span>Scan to order</span></article>`).join("");
   grid.querySelectorAll("[data-onboarding-qr]").forEach((canvas) => {
     const table = allTables().find((entry) => entry.id === canvas.dataset.onboardingQr);
-    if (table) drawQrCanvas(canvas, tableOrderingLink(table));
+    const url = table && issuedQrUrl(table);
+    if (url) drawQrCanvas(canvas, url);
   });
 }
 
@@ -4032,14 +4198,18 @@ async function finishOnboarding() {
 
 function configureOnboardingSuccessLinks() {
   const slug = onboardingRestaurant?.slug || restaurant().slug;
-  const firstTable = allTables()[0];
-  document.getElementById("openCustomerOrdering").href = `/order/${encodeURIComponent(slug)}/${encodeURIComponent(firstTable?.id || "table-1")}`;
+  document.getElementById("openCustomerOrdering").removeAttribute("href");
+  document.getElementById("openCustomerOrdering").textContent = "Generate a customer QR from the dashboard";
   document.getElementById("openKitchenScreen").href = `/dashboard/${encodeURIComponent(slug)}/kitchen`;
   document.getElementById("openRestaurantDashboard").href = `/dashboard/${encodeURIComponent(slug)}/dashboard`;
 }
 
 async function initializeAccountFlow() {
   const route = window.TableOrderCloud?.routeContext?.() || APP_ROUTE;
+  if (route.area === "legacy-order") {
+    document.getElementById("customerTableName").textContent = "This customer link has expired";
+    return;
+  }
   if (["order", "restaurant"].includes(route.area)) return;
   window.TableOrderCloud.consumeAuthRedirect?.();
   if (route.area === "join") {
@@ -4094,12 +4264,19 @@ function bindGlobalActions() {
   });
   document.getElementById("clearCart").addEventListener("click", () => {
     state.cart = [];
+    if (isCanonicalPublicOrderRoute()) publicOrderIdempotencyKey = "";
     lastConfirmedOrderId = "";
     saveState();
     renderCart();
   });
 
-  document.getElementById("submitOrder").addEventListener("click", submitOrder);
+  document.getElementById("orderNote")?.addEventListener("input", () => {
+    if (isCanonicalPublicOrderRoute()) saveState();
+  });
+
+  document.getElementById("submitOrder").addEventListener("click", openReviewOrder);
+  document.getElementById("confirmReviewOrder")?.addEventListener("click", submitOrder);
+  document.getElementById("cancelReviewOrder")?.addEventListener("click", closeReviewOrder);
   document.getElementById("printKitchen").addEventListener("click", printKitchen);
   document.getElementById("mobileCartDock").addEventListener("click", () => {
     document.querySelector(".order-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -4219,6 +4396,9 @@ function bindGlobalActions() {
   document.getElementById("optionModal").addEventListener("click", (event) => {
     if (event.target.id === "optionModal") closeOptionModal();
   });
+  document.getElementById("reviewOrderModal").addEventListener("click", (event) => {
+    if (event.target.id === "reviewOrderModal") closeReviewOrder();
+  });
   document.getElementById("clearLogo").addEventListener("click", async () => {
     state.restaurant = { ...restaurant(), logoData: "", logoWatermarkData: "" };
     document.getElementById("restaurantLogo").value = "";
@@ -4230,6 +4410,7 @@ function bindGlobalActions() {
 
 function render() {
   applyTheme();
+  renderBrand();
   renderStaffSession();
   renderTablePicker();
   renderCategories();
@@ -4237,17 +4418,19 @@ function render() {
   renderAlsoOrdered();
   renderCart();
   renderCustomerOrderStatus();
-  renderKitchen();
-  renderFrontDesk();
-  renderReports();
-  renderSetup();
+  if (staffUser) {
+    renderKitchen();
+    renderFrontDesk();
+    renderReports();
+    renderSetup();
+  }
 }
 
 renderTabs();
 bindGlobalActions();
 render();
 checkDatabaseConnection();
-loadCloudDataIntoApp({ silent: true });
+if (APP_ROUTE.area !== "legacy-order" && !isAuthenticatedDashboardRoute()) loadCloudDataIntoApp({ silent: true });
 initializeStaffAuth();
 initializeAccountFlow();
 startCustomerOrderStatusSync();

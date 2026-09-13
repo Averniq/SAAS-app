@@ -3,11 +3,13 @@
   const SESSION_KEY = "aveniq-owner-session";
   let authSession = readStoredSession();
   let activeMembership = null;
+  let activePlatformDashboard = null;
 
   function routeContext() {
     const parts = window.location.pathname.split("/").filter(Boolean).map(decodeURIComponent);
     const params = new URLSearchParams(window.location.search);
-    if (parts[0] === "order" && parts[1]) return { area: "order", restaurantSlug: parts[1], tableRef: parts[2] || params.get("table") || "" };
+    if (parts[0] === "order" && parts[1] && !parts[2]) return { area: "order", token: parts[1], restaurantSlug: "", tableRef: "" };
+    if (parts[0] === "order") return { area: "legacy-order", token: "", restaurantSlug: "", tableRef: "" };
     if (parts[0] === "dashboard" && parts[1]) return { area: parts[2] || "dashboard", restaurantSlug: parts[1], tableRef: "" };
     if (parts[0] === "r" && parts[1]) return { area: "restaurant", restaurantSlug: parts[1], tableRef: params.get("table") || "" };
     if (parts[0] === "join" && parts[1]) return { area: "join", restaurantSlug: "", tableRef: "", inviteToken: parts[1] };
@@ -152,7 +154,12 @@
       throw error;
     }
     const slug = routeContext().restaurantSlug;
-    const membership = memberships.find((entry) => entry.restaurants?.slug === slug) || (!slug ? memberships[0] : null);
+    if (!slug) {
+      const error = new Error("TENANT_SELECTION_REQUIRED");
+      error.code = "TENANT_SELECTION_REQUIRED";
+      throw error;
+    }
+    const membership = memberships.find((entry) => entry.restaurants?.slug === slug);
     if (!membership) throw new Error("This account does not have access to this restaurant.");
     const related = Array.isArray(membership.restaurants) ? membership.restaurants[0] : membership.restaurants;
     activeMembership = { restaurantId: membership.restaurant_id, restaurantSlug: related?.slug, role: membership.role };
@@ -176,6 +183,25 @@
     );
     if (!rows?.[0]) return null;
     return { id: session.user.id, email: session.user.email || "Master", role: "platform_admin" };
+  }
+
+  async function getPlatformDashboardProfile(slug) {
+    const session = await getSession();
+    const platform = await getPlatformProfile();
+    if (!session?.user?.id || !platform || !slug) {
+      const error = new Error("PLATFORM_RESTAURANT_NOT_FOUND");
+      error.code = "PLATFORM_RESTAURANT_NOT_FOUND";
+      throw error;
+    }
+    const rows = await request(`restaurants?select=id,slug,name,status&slug=eq.${encodeURIComponent(slug)}&limit=2`, { accessToken: session.access_token });
+    if (!Array.isArray(rows) || rows.length !== 1) {
+      const error = new Error("PLATFORM_RESTAURANT_NOT_FOUND");
+      error.code = "PLATFORM_RESTAURANT_NOT_FOUND";
+      throw error;
+    }
+    const restaurant = rows[0];
+    activePlatformDashboard = { userId: platform.id, restaurantId: restaurant.id, restaurantSlug: restaurant.slug, restaurantName: restaurant.name, restaurantStatus: restaurant.status };
+    return { id: platform.id, email: platform.email, ...activePlatformDashboard, role: "platform_admin" };
   }
 
   async function loadPlatformRestaurants() {
@@ -239,28 +265,47 @@
   async function signOut() {
     const token = activeAccessToken();
     try { if (token) await authRequest("logout", { method: "POST", accessToken: token }); }
-    finally { activeMembership = null; storeSession(null); }
+    finally { activeMembership = null; activePlatformDashboard = null; storeSession(null); }
   }
 
+  async function issuePublicQrTableToken(restaurantId, tableId, expiresAt = null) {
+    const session = await getSession();
+    if (!session) throw new Error("Staff login is required.");
+    return request("rpc/issue_public_qr_table_token", { method: "POST", accessToken: session.access_token, body: JSON.stringify({ p_restaurant_id: restaurantId, p_table_id: tableId, p_expires_at: expiresAt }) });
+  }
+  async function getPublicQrTableTokenMetadata(restaurantId) {
+    const session = await getSession();
+    if (!session) throw new Error("Staff login is required.");
+    return request("rpc/get_public_qr_table_token_metadata", { method: "POST", accessToken: session.access_token, body: JSON.stringify({ p_restaurant_id: restaurantId }) });
+  }
+  function getPublicQrOrderContext(token) { return request("rpc/get_public_qr_order_context", { method: "POST", body: JSON.stringify({ p_token: token }) }); }
+  function submitPublicQrOrder(token, items, note, customerName, idempotencyKey) { return request("rpc/submit_public_qr_order", { method: "POST", body: JSON.stringify({ p_token: token, p_items: items, p_note: note || "", p_customer_name: customerName || "", p_idempotency_key: idempotencyKey }) }); }
+  function getPublicQrOrderStatus(token, orderId) { return request("rpc/get_public_qr_order_status", { method: "POST", body: JSON.stringify({ p_token: token, p_order_id: orderId }) }); }
+
   async function checkConnection() {
-    try {
-      const data = await request("rpc/get_public_restaurant", { method: "POST", body: JSON.stringify({ p_slug: restaurantSlug(), p_table_ref: routeContext().tableRef || "" }) });
-      return data?.restaurant || null;
-    } catch (error) {
-      if (error.status === 404) return null;
-      throw error;
-    }
+    const context = routeContext();
+    if (context.area !== "order") return null;
+    try { return (await getPublicQrOrderContext(context.token))?.restaurant || null; }
+    catch (error) { if (error.status === 404 || /PUBLIC_TOKEN_NOT_FOUND|PUBLIC_ORDERING_UNAVAILABLE|ENTITLEMENT_NOT_ACTIVE/.test(error.message)) return null; throw error; }
   }
 
   async function loadRestaurantData() {
     const context = routeContext();
-    const session = ["order", "restaurant"].includes(context.area) ? null : await getSession();
-    const data = await request("rpc/get_public_restaurant", {
-      method: "POST",
-      accessToken: session?.access_token,
-      body: JSON.stringify({ p_slug: restaurantSlug(), p_table_ref: context.area === "order" ? context.tableRef : "" })
-    });
-    return { restaurant: data.restaurant, tables: data.tables || [], menuItems: data.menu_items || [] };
+    if (context.area === "order") {
+      const data = await getPublicQrOrderContext(context.token);
+      return { restaurant: data.restaurant, tables: data.table ? [{ id: data.table.id, local_id: data.table.id, table_name: data.table.name, table_number: data.table.number }] : [], menuItems: data.menu_items || [], categories: data.categories || [], publicToken: context.token };
+    }
+    const session = await getSession();
+    const profile = activePlatformDashboard?.userId === session?.user?.id && activePlatformDashboard?.restaurantSlug === context.restaurantSlug
+      ? { id: session?.user?.id, email: session?.user?.email || "Master", ...activePlatformDashboard, role: "platform_admin" }
+      : await getStaffProfile();
+    const [restaurant, tables, menuItems, publicQrTokenMetadata] = await Promise.all([
+      request(`restaurants?select=*&id=eq.${encodeURIComponent(profile.restaurantId)}&limit=1`, { accessToken: session.access_token }),
+      request(`tables?select=*&restaurant_id=eq.${encodeURIComponent(profile.restaurantId)}&order=sort_order.asc`, { accessToken: session.access_token }),
+      request(`menu_items?select=*&restaurant_id=eq.${encodeURIComponent(profile.restaurantId)}&is_active=eq.true&is_available=eq.true&sold_out=eq.false&order=sort_order.asc`, { accessToken: session.access_token }),
+      getPublicQrTableTokenMetadata(profile.restaurantId)
+    ]);
+    return { restaurant: restaurant?.[0], tables: tables || [], menuItems: menuItems || [], publicQrTokenMetadata: publicQrTokenMetadata || [] };
   }
 
   async function createRestaurant(profile) {
@@ -335,24 +380,20 @@
       (Number(char) ^ (window.crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (Number(char) / 4)))).toString(16));
   }
 
-  async function submitOrder(order, restaurantId, tableId) {
-    if (!restaurantId || !tableId) throw new Error("Restaurant or table is missing.");
-    const items = order.items.map((item) => ({
-      menu_item_id: item.menuItemCloudId,
-      quantity: item.quantity,
-      notes: item.notes || "",
-      options: (item.options || []).map((option) => ({ groupId: option.groupId, choiceId: option.choiceId }))
-    }));
-    const result = await request("rpc/submit_order", {
-      method: "POST",
-      body: JSON.stringify({ p_restaurant_id: restaurantId, p_table_id: tableId, p_local_id: order.id, p_note: order.note || "", p_items: items, p_customer_name: order.customerName || "" })
-    });
+  function isUuid(value) {
+    return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  async function submitOrder(order) {
+    const token = routeContext().token;
+    if (!token) throw new Error("A valid customer token is required.");
+    if (!isUuid(order.idempotencyKey)) throw new Error("A valid public order idempotency key is required.");
+    const items = order.items.map((item) => ({ menu_item_id: item.menuItemCloudId, quantity: item.quantity, options: (item.options || []).map((option) => ({ groupId: option.groupId, choiceId: option.choiceId })) }));
+    const result = await submitPublicQrOrder(token, items, order.note, order.customerName, order.idempotencyKey);
     return { id: result.id, number: Number(result.order_number) };
   }
 
-  async function loadCustomerOrderStatus(orderId, localId, tableToken) {
-    return request("rpc/get_customer_order_status", { method: "POST", body: JSON.stringify({ p_order_id: orderId, p_local_id: localId, p_table_token: tableToken }) });
-  }
+  async function loadCustomerOrderStatus(orderId) { return getPublicQrOrderStatus(routeContext().token, orderId); }
 
   async function loadOrders(restaurantId) {
     const session = await getSession();
@@ -387,7 +428,7 @@
 
   async function scopedPatch(table, rowId, restaurantId, fields) {
     const session = await getSession();
-    const tenantId = restaurantId || activeMembership?.restaurantId;
+    const tenantId = restaurantId || activeMembership?.restaurantId || activePlatformDashboard?.restaurantId;
     if (!tenantId) throw new Error("Restaurant context is missing.");
     return request(`${table}?id=eq.${encodeURIComponent(rowId)}&restaurant_id=eq.${encodeURIComponent(tenantId)}`, {
       method: "PATCH", accessToken: session?.access_token, headers: { Prefer: "return=minimal" }, body: JSON.stringify(fields)
@@ -396,7 +437,7 @@
 
   async function updateOrderStatus(orderId, status, restaurantId) {
     const session = await getSession();
-    const tenantId = restaurantId || activeMembership?.restaurantId;
+    const tenantId = restaurantId || activeMembership?.restaurantId || activePlatformDashboard?.restaurantId;
     if (!session || !tenantId) throw new Error("Restaurant context is missing.");
     try {
       return await request("rpc/update_restaurant_order_status", {
@@ -418,7 +459,7 @@
 
   async function recordOrderPayment(orderId, payment, restaurantId) {
     const session = await getSession();
-    const tenantId = restaurantId || activeMembership?.restaurantId;
+    const tenantId = restaurantId || activeMembership?.restaurantId || activePlatformDashboard?.restaurantId;
     if (!session || !tenantId) throw new Error("Restaurant context is missing.");
     return request("rpc/record_restaurant_order_payment", {
       method: "POST",
@@ -440,7 +481,7 @@
     const number = Number(String(table.id || "").replace(/\D/g, "")) || sortOrder || 1;
     return request("tables", {
       method: "POST", accessToken: session?.access_token, headers: { Prefer: "return=representation" },
-      body: JSON.stringify({ restaurant_id: restaurantId, local_id: table.id, table_number: number, table_name: table.name, name: table.name, table_token: table.token, sort_order: sortOrder || number })
+      body: JSON.stringify({ restaurant_id: restaurantId, local_id: table.id, table_number: number, table_name: table.name, name: table.name, sort_order: sortOrder || number })
     });
   }
   function updateRestaurantTable(id, fields, restaurantId) {
@@ -461,10 +502,11 @@
 
   window.TableOrderCloud = {
     config, routeContext, request, checkConnection, loadRestaurantData, bootstrapMenu, submitOrder, loadCustomerOrderStatus,
+    issuePublicQrTableToken, getPublicQrTableTokenMetadata, getPublicQrOrderContext, submitPublicQrOrder, getPublicQrOrderStatus,
     loadOrders, updateOrderStatus, recordOrderPayment, updateMenuItemPhoto, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
     loadReportDashboard, loadSalesReport, loadMenuReport, loadTableReport, loadHourlyReport, loadOrderReport,
     createRestaurantTable, updateRestaurantTable, deactivateRestaurantTable, updateRestaurantProfile,
-    signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, signOut,
+    signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, getPlatformDashboardProfile, signOut,
     loadPlatformRestaurants, platformCreateRestaurant,
     createRestaurant, createTables, importSampleMenu, completeOnboarding,
     createRestaurantInvite, acceptRestaurantInvite, listRestaurantTeam, revokeRestaurantInvite
