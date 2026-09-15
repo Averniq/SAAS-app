@@ -291,6 +291,14 @@
 
   async function loadRestaurantData() {
     const context = routeContext();
+    if (context.area === "restaurant") {
+      // Menu browsing has no ordering authority, including in a signed-in browser.
+      const data = await request("rpc/get_public_restaurant", {
+        method: "POST", accessToken: config.publishableKey,
+        body: JSON.stringify({ p_slug: context.restaurantSlug, p_table_ref: "" })
+      });
+      return { restaurant: data.restaurant, tables: [], menuItems: data.menu_items || [] };
+    }
     if (context.area === "order") {
       const data = await getPublicQrOrderContext(context.token);
       return { restaurant: data.restaurant, tables: data.table ? [{ id: data.table.id, local_id: data.table.id, table_name: data.table.name, table_number: data.table.number }] : [], menuItems: data.menu_items || [], categories: data.categories || [], publicToken: context.token };

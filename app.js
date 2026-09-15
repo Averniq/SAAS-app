@@ -310,12 +310,13 @@ defaultMenuItems.splice(
   defaultMenuItem("vanilla_mochi", "Dessert", "Vanilla mochi", 7, "Two pieces.", [], 1)
 );
 
-let state = ["order", "legacy-order"].includes(APP_ROUTE.area) || isAuthenticatedDashboardRoute() ? { selectedTableId: "", cart: [], orders: [], soldOutIds: [], menuItems: [], menuVersion: MENU_VERSION, restaurant: { ...defaultRestaurant, name: "Loading…", isOpen: false }, tables: [] } : loadState();
+let state = ["order", "legacy-order", "app"].includes(APP_ROUTE.area) || isAuthenticatedDashboardRoute() ? { selectedTableId: "", cart: [], orders: [], soldOutIds: [], menuItems: [], menuVersion: MENU_VERSION, restaurant: { ...defaultRestaurant, name: APP_ROUTE.area === "legacy-order" ? "Ordering unavailable" : "Loading…", isOpen: false }, tables: [] } : loadState();
+let customerAvailabilityState = APP_ROUTE.area === "legacy-order" ? "unavailable" : "loading";
 let dashboardCatalogueState = isAuthenticatedDashboardRoute() ? "loading" : "ready";
 let activeView = "customer";
 let activeCategory = "All";
 let lockedTableToken = tableTokenFromUrl();
-let selectedTableId = tableIdFromUrl() || (lockedTableToken ? "" : state.selectedTableId) || "t6";
+let selectedTableId = tableIdFromUrl() || (lockedTableToken ? "" : state.selectedTableId) || "";
 let publicOrderIdempotencyKey = "";
 let publicOrderDraftRestored = false;
 let publicOrderSubmissionInProgress = false;
@@ -378,6 +379,12 @@ const samplePhotoUrls = {
 };
 
 function loadState() {
+  if (APP_ROUTE.area === "restaurant") {
+    // Cached tables are not proof of current public ordering authority. Leave
+    // existing storage untouched, including carts saved by older clients.
+    return { selectedTableId: "", cart: [], orders: [], soldOutIds: [], menuItems: [], menuVersion: MENU_VERSION,
+      restaurant: { ...defaultRestaurant, name: "Loading…", isOpen: false }, tables: [] };
+  }
   const fallback = {
     selectedTableId: "t6",
     cart: [],
@@ -420,7 +427,9 @@ function loadState() {
 }
 
 function saveState() {
+  if (APP_ROUTE.area === "restaurant") return;
   if (isCanonicalPublicOrderRoute()) {
+    if (customerAvailabilityState !== "ready") return;
     persistPublicOrderDraft();
     return;
   }
@@ -1466,6 +1475,13 @@ function renderTablePicker() {
   const picker = document.getElementById("tablePicker");
   picker.innerHTML = allTables().map((table) => `<option value="${table.id}">${escapeHtml(table.name)}</option>`).join("");
 
+  if (APP_ROUTE.area === "restaurant" || (["order", "legacy-order"].includes(APP_ROUTE.area) && customerAvailabilityState === "unavailable")) {
+    picker.classList.add("hidden");
+    picker.disabled = true;
+    document.getElementById("customerTableName").textContent = APP_ROUTE.area === "restaurant" ? "Menu only" : "Ordering unavailable";
+    return;
+  }
+
   if (lockedTableToken) {
     const lockedTable = applyLockedTableSelection();
     picker.classList.add("hidden");
@@ -1616,10 +1632,12 @@ function renderCart() {
   document.getElementById("cartTotal").textContent = money(cartTotal());
   document.getElementById("submitOrder").disabled = !profile.isOpen || !entries.length;
   document.getElementById("submitOrder").textContent = profile.isOpen ? "Review Order" : "Ordering Closed";
+  if (APP_ROUTE.area === "restaurant" || customerAvailabilityState === "unavailable") document.getElementById("submitOrder").textContent = "Ordering unavailable";
   renderMobileCustomerControls(entries);
   renderOrderConfirmation();
   list.querySelectorAll("[data-inc]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (APP_ROUTE.area === "order" && customerAvailabilityState !== "ready") return;
       normalizeCart();
       lastConfirmedOrderId = "";
       const line = state.cart.find((entry) => entry.id === button.dataset.inc);
@@ -1630,6 +1648,7 @@ function renderCart() {
   });
   list.querySelectorAll("[data-dec]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (APP_ROUTE.area === "order" && customerAvailabilityState !== "ready") return;
       normalizeCart();
       lastConfirmedOrderId = "";
       const line = state.cart.find((entry) => entry.id === button.dataset.dec);
@@ -3515,13 +3534,13 @@ async function loadCloudDataIntoApp(options = {}) {
       taxId: cloud.restaurant.tax_id || "",
       taxRate: Number(cloud.restaurant.tax_rate) || defaultRestaurant.taxRate,
       timezone: cloud.restaurant.timezone || currentProfile.timezone || "Australia/Sydney",
-      isOpen: cloud.restaurant.is_open,
+      isOpen: APP_ROUTE.area === "restaurant" ? false : cloud.restaurant.is_open,
       logoData: cloud.restaurant.logo_url || currentProfile.logoData,
       cloudId: cloud.restaurant.id
     };
 
     const publicQrTokenMetadataByTableId = new Map((cloud.publicQrTokenMetadata || []).map((metadata) => [metadata.table_id, metadata]));
-    state.tables = cloud.tables.map((table) => ({
+    state.tables = (APP_ROUTE.area === "restaurant" ? [] : cloud.tables).map((table) => ({
       id: table.local_id || table.id,
       cloudId: table.id,
       name: table.table_name || table.name,
@@ -3563,6 +3582,7 @@ async function loadCloudDataIntoApp(options = {}) {
     state.soldOutIds = cloud.menuItems.filter((item) => item.is_available === false || item.sold_out).map((item) => item.local_id);
     if (isAuthenticatedDashboardRoute()) dashboardCatalogueState = "ready";
 
+    customerAvailabilityState = "ready";
     restorePublicOrderDraft();
     saveState();
     render();
@@ -3575,6 +3595,19 @@ async function loadCloudDataIntoApp(options = {}) {
     }
     return true;
   } catch (error) {
+    if (["order", "restaurant"].includes(APP_ROUTE.area)) {
+      customerAvailabilityState = "unavailable";
+      state.restaurant = { ...state.restaurant, name: APP_ROUTE.area === "restaurant" ? "Menu unavailable" : "Ordering unavailable", isOpen: false };
+      state.tables = [];
+      state.menuItems = [];
+      // Never save/reset a customer draft on a failed or ambiguous request.
+      renderBrand();
+      renderCustomerAvailability();
+      renderTablePicker();
+      document.getElementById("menuGrid").innerHTML = '<div class="empty-state">Please reload to try again, or contact staff.</div>';
+      document.getElementById("submitOrder").disabled = true;
+      document.getElementById("submitOrder").textContent = "Ordering unavailable";
+    }
     if (isAuthenticatedDashboardRoute()) { dashboardCatalogueState = "error"; renderMenu(); }
     if (!silent) setDatabaseStatus("error", "Cloud load failed", error.message);
     return false;
@@ -4207,7 +4240,7 @@ function configureOnboardingSuccessLinks() {
 async function initializeAccountFlow() {
   const route = window.TableOrderCloud?.routeContext?.() || APP_ROUTE;
   if (route.area === "legacy-order") {
-    document.getElementById("customerTableName").textContent = "This customer link has expired";
+    document.getElementById("customerTableName").textContent = "Ordering unavailable";
     return;
   }
   if (["order", "restaurant"].includes(route.area)) return;
@@ -4424,14 +4457,31 @@ function render() {
     renderReports();
     renderSetup();
   }
+  renderCustomerAvailability();
+}
+
+function renderCustomerAvailability() {
+  const menuOnly = APP_ROUTE.area === "restaurant";
+  const unavailable = ["order", "legacy-order"].includes(APP_ROUTE.area) && customerAvailabilityState === "unavailable";
+  const notice = document.getElementById("customerAvailability");
+  if (notice) notice.textContent = menuOnly && customerAvailabilityState === "unavailable"
+    ? "The menu is temporarily unavailable. Please reload or contact staff."
+    : menuOnly || unavailable ? "Online ordering is temporarily unavailable. Please contact staff to place your order. Your saved order draft has not been deleted." : "";
+  if (menuOnly) document.getElementById("openStatus").textContent = "Menu only";
+  if (["order", "restaurant", "legacy-order"].includes(APP_ROUTE.area)) {
+    const readOnly = menuOnly || customerAvailabilityState !== "ready";
+    document.getElementById("clearCart").disabled = readOnly;
+    document.getElementById("orderNote").disabled = readOnly;
+    document.querySelectorAll("#cartItems [data-inc], #cartItems [data-dec]").forEach((button) => { button.disabled = readOnly; });
+  }
 }
 
 renderTabs();
 bindGlobalActions();
 render();
 checkDatabaseConnection();
-if (APP_ROUTE.area !== "legacy-order" && !isAuthenticatedDashboardRoute()) loadCloudDataIntoApp({ silent: true });
-initializeStaffAuth();
+if (["order", "restaurant"].includes(APP_ROUTE.area)) loadCloudDataIntoApp({ silent: true });
+if (!["order", "restaurant", "legacy-order"].includes(APP_ROUTE.area)) initializeStaffAuth();
 initializeAccountFlow();
 startCustomerOrderStatusSync();
 

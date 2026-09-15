@@ -1,15 +1,15 @@
-const APP_SHELL_CACHE = "aveniq-shell-v18";
-const RUNTIME_CACHE = "aveniq-runtime-v18";
+const APP_SHELL_CACHE = "aveniq-shell-v19";
+const RUNTIME_CACHE = "aveniq-runtime-v19";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/manifest.webmanifest?v=20260911-1",
-  "/styles.css?v=20260911-1",
-  "/mobile-shell.js?v=20260911-1",
-  "/supabase-config.js?v=20260911-1",
-  "/supabase-client.js?v=20260911-1",
-  "/vendor/qrcode.js?v=20260911-1",
-  "/app.js?v=20260911-1",
+  "/manifest.webmanifest?v=20260914-containment-1",
+  "/styles.css?v=20260914-containment-1",
+  "/mobile-shell.js?v=20260914-containment-1",
+  "/supabase-config.js?v=20260914-containment-1",
+  "/supabase-client.js?v=20260914-containment-1",
+  "/vendor/qrcode.js?v=20260914-containment-1",
+  "/app.js?v=20260914-containment-1",
   "/assets/brand/sake-street-logo-mark.png",
   "/assets/brand/sake-street-logo-round.webp",
   "/assets/brand/sake-street-logo-full.webp"

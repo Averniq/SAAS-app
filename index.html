@@ -9,10 +9,10 @@
     <meta name="apple-mobile-web-app-title" content="Aveniq" />
     <meta name="format-detection" content="telephone=no" />
     <title>Aveniq Restaurant Ordering</title>
-    <link rel="manifest" href="/manifest.webmanifest?v=20260911-1" />
+    <link rel="manifest" href="/manifest.webmanifest?v=20260914-containment-1" />
     <link id="tenantFavicon" rel="icon" href="/assets/brand/sake-street-logo-mark.webp" type="image/webp" />
     <link id="tenantAppleTouchIcon" rel="apple-touch-icon" href="/assets/brand/sake-street-logo-mark.png" />
-    <link rel="stylesheet" href="/styles.css?v=20260911-1" />
+    <link rel="stylesheet" href="/styles.css?v=20260914-containment-1" />
   </head>
   <body>
     <section class="account-gateway hidden" id="accountGateway" aria-live="polite">
@@ -216,7 +216,8 @@
         <div class="table-strip">
           <div>
             <p class="eyebrow">Scanned table</p>
-            <h2 id="customerTableName">Table 6</h2>
+            <h2 id="customerTableName">Loading…</h2>
+            <p id="customerAvailability" class="muted" role="status" aria-live="polite"></p>
           </div>
           <select id="tablePicker" aria-label="Select table"></select>
         </div>
@@ -651,10 +652,10 @@
       <section class="print-page"></section>
     </template>
 
-    <script src="/mobile-shell.js?v=20260911-1"></script>
-    <script src="/supabase-config.js?v=20260911-1"></script>
-    <script src="/supabase-client.js?v=20260911-1"></script>
-    <script src="/vendor/qrcode.js?v=20260911-1"></script>
-    <script src="/app.js?v=20260911-1"></script>
+    <script src="/mobile-shell.js?v=20260914-containment-1"></script>
+    <script src="/supabase-config.js?v=20260914-containment-1"></script>
+    <script src="/supabase-client.js?v=20260914-containment-1"></script>
+    <script src="/vendor/qrcode.js?v=20260914-containment-1"></script>
+    <script src="/app.js?v=20260914-containment-1"></script>
   </body>
 </html>
