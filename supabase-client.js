@@ -457,19 +457,33 @@
     }
   }
 
-  async function recordOrderPayment(orderId, payment, restaurantId) {
+  async function recordAuthoritativePayment(orderId, payment, restaurantId) {
     const session = await getSession();
     const tenantId = restaurantId || activeMembership?.restaurantId || activePlatformDashboard?.restaurantId;
     if (!session || !tenantId) throw new Error("Restaurant context is missing.");
-    return request("rpc/record_restaurant_order_payment", {
+    if (!isUuid(payment?.idempotencyKey)) throw new Error("A valid payment idempotency key is required.");
+    if (!Number.isSafeInteger(payment?.amountCents) || payment.amountCents <= 0) throw new Error("A valid payment amount is required.");
+    const result = await request("rpc/record_authoritative_payment", {
       method: "POST",
       accessToken: session.access_token,
       body: JSON.stringify({
         p_restaurant_id: tenantId,
         p_order_id: orderId,
-        p_method: payment.method || "Other"
+        p_amount_cents: payment.amountCents,
+        p_method: payment.method || "Other",
+        p_reference: payment.reference || "",
+        p_note: payment.note || "",
+        p_idempotency_key: payment.idempotencyKey
       })
     });
+    return {
+      paymentId: result.payment_id,
+      amountCents: Number(result.amount_cents),
+      paidCents: Number(result.paid_cents),
+      remainingCents: Number(result.remaining_cents),
+      paymentStatus: result.payment_status,
+      idempotentReplay: result.idempotent_replay === true
+    };
   }
 
   function updateMenuItemPhoto(id, photoUrl, restaurantId) { return scopedPatch("menu_items", id, restaurantId, { image_url: photoUrl || "", photo_url: photoUrl || "" }); }
@@ -503,7 +517,7 @@
   window.TableOrderCloud = {
     config, routeContext, request, checkConnection, loadRestaurantData, bootstrapMenu, submitOrder, loadCustomerOrderStatus,
     issuePublicQrTableToken, getPublicQrTableTokenMetadata, getPublicQrOrderContext, submitPublicQrOrder, getPublicQrOrderStatus,
-    loadOrders, updateOrderStatus, recordOrderPayment, updateMenuItemPhoto, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
+    loadOrders, updateOrderStatus, recordAuthoritativePayment, updateMenuItemPhoto, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
     loadReportDashboard, loadSalesReport, loadMenuReport, loadTableReport, loadHourlyReport, loadOrderReport,
     createRestaurantTable, updateRestaurantTable, deactivateRestaurantTable, updateRestaurantProfile,
     signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, getPlatformDashboardProfile, signOut,
