@@ -436,6 +436,7 @@
   }
 
   async function updateOrderStatus(orderId, status, restaurantId) {
+    if (String(status).trim().toLowerCase() === "paid") throw new Error("Payments must be recorded through the authoritative payment service.");
     const session = await getSession();
     const tenantId = restaurantId || activeMembership?.restaurantId || activePlatformDashboard?.restaurantId;
     if (!session || !tenantId) throw new Error("Restaurant context is missing.");
@@ -448,11 +449,11 @@
     } catch (error) {
       const migrationMissing = error.status === 404 || /update_restaurant_order_status|schema cache|could not find/i.test(error.message);
       if (!migrationMissing) throw error;
-      const statusToDatabase = { Preparing: "preparing", Ready: "ready", Served: "completed", Paid: "completed", Cancelled: "cancelled" };
+      const statusToDatabase = { Preparing: "preparing", Ready: "ready", Served: "completed", Cancelled: "cancelled" };
       const body = { status: statusToDatabase[status] || String(status).toLowerCase() };
       const timestamp = new Date().toISOString();
       if (status === "Served") body.served_at = timestamp;
-      if (["Paid", "Cancelled"].includes(status)) body.closed_at = timestamp;
+      if (status === "Cancelled") body.closed_at = timestamp;
       return scopedPatch("orders", orderId, tenantId, body);
     }
   }
@@ -463,6 +464,7 @@
     if (!session || !tenantId) throw new Error("Restaurant context is missing.");
     if (!isUuid(payment?.idempotencyKey)) throw new Error("A valid payment idempotency key is required.");
     if (!Number.isSafeInteger(payment?.amountCents) || payment.amountCents <= 0) throw new Error("A valid payment amount is required.");
+    if (!["Cash", "Card", "EFTPOS", "Other"].includes(payment.method)) throw new Error("A valid payment method is required.");
     const result = await request("rpc/record_authoritative_payment", {
       method: "POST",
       accessToken: session.access_token,
@@ -470,12 +472,18 @@
         p_restaurant_id: tenantId,
         p_order_id: orderId,
         p_amount_cents: payment.amountCents,
-        p_method: payment.method || "Other",
+        p_method: payment.method,
         p_reference: payment.reference || "",
         p_note: payment.note || "",
         p_idempotency_key: payment.idempotencyKey
       })
     });
+    if (!isUuid(result?.payment_id) || result.amount_cents !== payment.amountCents
+        || ![result.amount_cents, result.paid_cents, result.remaining_cents].every(Number.isSafeInteger)
+        || result.paid_cents < result.amount_cents || result.remaining_cents < 0
+        || result.payment_status !== (result.remaining_cents === 0 ? "paid" : "partial")) {
+      throw new Error("Payment response could not be verified. Retry the same payment attempt.");
+    }
     return {
       paymentId: result.payment_id,
       amountCents: Number(result.amount_cents),

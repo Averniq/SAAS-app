@@ -7,10 +7,13 @@ import test from 'node:test';
 const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const section = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 function harness(role = 'owner') {
-  const order = { cloudId: 'order-a', status: 'New', total: 10, items: [{ price: 10, quantity: 1 }] };
+  const order = { cloudId: 'order-a', paymentRestaurantId: 'tenant-a', status: 'New', total: 10, items: [{ price: 10, quantity: 1 }] };
+  const storage = new Map();
   const c = vm.createContext({
     staffUser: { role, restaurantId: 'tenant-a' }, state: { orders: [order] },
+    isAuthenticatedDashboardRoute: () => true,
     paymentSubmissionInProgress: false, paymentSubmissionGeneration: 0,
+    paymentFinancialContext: null, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
     cloudSyncBusy: false, cloudSyncInitialized: false, knownCloudOrderIds: new Set(),
     lastCloudSyncAt: null, soundEnabled: false,
     createPublicOrderIdempotencyKey: randomUUID,
@@ -21,11 +24,12 @@ function harness(role = 'owner') {
     setCloudSyncStatus() {}, cloudSyncSummary() {}, showKitchenNewOrderAlert() {},
     cloudOrderToLocal: (o) => ({ ...o }),
   });
-  vm.runInContext(`function saveState(){ snapshots.push(JSON.stringify(state.orders)); }
+  vm.runInContext(`function saveState(){ persistPaymentFinancialState(); snapshots.push(JSON.stringify(state.orders)); }
     function showOrderToast(message){ messages.push(message); }
     ${section('function paymentAmountCents(', 'function tableTokenFromUrl(')}
     ${section('async function syncCloudOrders(', 'function startCloudOrderSync(')}
     ${section('async function markOrdersPaid(', 'function renderKitchen(')}`, c);
+  c.beginPaymentFinancialSession(c.staffUser); c.state.orders = [order];
   c.window.TableOrderCloud.loadOrders = async () => JSON.parse(JSON.stringify(c.state.orders));
   c.window.TableOrderCloud.recordAuthoritativePayment = async () => ({ paymentId: randomUUID(), paymentStatus: 'paid', amountCents: 1000 });
   return c;

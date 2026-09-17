@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { execFileSync } from 'node:child_process';
 
 const storage = new Map([["aveniq-owner-session", JSON.stringify({
   access_token: "local-test-token", expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -8,6 +9,10 @@ const storage = new Map([["aveniq-owner-session", JSON.stringify({
 })]]);
 const requests = [];
 let rejectCanonical = false;
+let canonicalResponse = {
+  payment_id: "30000000-0000-4000-8000-000000000001", amount_cents: 2150, paid_cents: 2150,
+  remaining_cents: 0, payment_status: "paid", idempotent_replay: false
+};
 const response = (data) => ({ ok: true, text: async () => JSON.stringify(data) });
 const window = {
   TABLEORDER_SUPABASE: { url: "https://local.example.invalid", publishableKey: "local-publishable" },
@@ -19,13 +24,13 @@ const context = vm.createContext({ window, URLSearchParams, fetch: async (url, o
   requests.push({ url, options });
   if (rejectCanonical && url.endsWith('/rpc/record_authoritative_payment')) throw new Error('ambiguous network failure');
   if (url.includes("restaurant_staff?")) return response([{ restaurant_id: "20000000-0000-4000-8000-000000000001", role: "cashier", restaurants: { slug: "sake-street", name: "Sake Street", status: "active" } }]);
-  if (url.endsWith("/rpc/record_authoritative_payment")) return response({
-    payment_id: "30000000-0000-4000-8000-000000000001", amount_cents: 2150, paid_cents: 2150,
-    remaining_cents: 0, payment_status: "paid", idempotent_replay: false
-  });
+  if (url.endsWith("/rpc/record_authoritative_payment")) return response(canonicalResponse);
   throw new Error(`Unexpected request: ${url}`);
 }});
-vm.runInContext(readFileSync(new URL("../supabase-client.js", import.meta.url), "utf8"), context);
+const source = process.argv.includes('--baseline')
+  ? execFileSync('git', ['show', 'HEAD:supabase-client.js'], { encoding: 'utf8' })
+  : readFileSync(new URL("../supabase-client.js", import.meta.url), "utf8");
+vm.runInContext(source, context);
 
 await window.TableOrderCloud.getStaffProfile();
 const payment = await window.TableOrderCloud.recordAuthoritativePayment("40000000-0000-4000-8000-000000000001", {
@@ -53,4 +58,25 @@ await assert.rejects(() => window.TableOrderCloud.recordAuthoritativePayment('40
 }), /ambiguous network failure/);
 assert.equal(requests.length, beforeFailure + 1, 'failure must not trigger another writer or status fallback');
 assert.ok(requests.at(-1).url.endsWith('/rpc/record_authoritative_payment'));
-console.log("Payment writer client adapter: PASS");
+rejectCanonical = false;
+const beforeStatus = requests.length;
+for (const status of ['Paid', 'paid', 'PAID', ' Paid ']) {
+  await assert.rejects(() => window.TableOrderCloud.updateOrderStatus('40000000-0000-4000-8000-000000000001', status), /authoritative payment service/);
+}
+assert.equal(requests.length, beforeStatus, 'Paid must be rejected before any RPC or PATCH');
+const attempt = { amountCents: 2150, method: 'Card', idempotencyKey: '50000000-0000-4000-8000-000000000001' };
+const valid = { ...canonicalResponse };
+const invalidResponses = [null, {}, { ...valid, payment_id: 'bad' }, { ...valid, amount_cents: 1 },
+  { ...valid, paid_cents: 1 }, { ...valid, remaining_cents: -1 }, { ...valid, remaining_cents: 1 },
+  { ...valid, paid_cents: 2150.5 }, { ...valid, payment_status: 'partial' }];
+for (const invalid of invalidResponses) {
+  canonicalResponse = invalid;
+  await assert.rejects(() => window.TableOrderCloud.recordAuthoritativePayment('40000000-0000-4000-8000-000000000001', attempt), /could not be verified/);
+}
+canonicalResponse = { ...valid, remaining_cents: 500, payment_status: 'partial' };
+const partial = await window.TableOrderCloud.recordAuthoritativePayment('40000000-0000-4000-8000-000000000001', attempt);
+assert.equal(partial.paymentStatus, 'partial'); assert.equal(partial.remainingCents, 500);
+const beforeMethod = requests.length;
+await assert.rejects(() => window.TableOrderCloud.recordAuthoritativePayment('40000000-0000-4000-8000-000000000001', { ...attempt, method: 'crypto' }), /valid payment method/);
+assert.equal(requests.length, beforeMethod);
+console.log('Payment writer client adapter: PASS (4 Paid variants denied, 9 malformed responses denied, partial normalized, invalid method denied; existing payload/UUID/network checks passed)');
