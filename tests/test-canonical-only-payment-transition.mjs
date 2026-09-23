@@ -11,6 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const container = 'supabase_db_p0d01final20260908';
 const source = 'supabase_db_p0d01t4h02cd79b9c6';
 const transition = readFileSync(path.join(root, 'remediation', 'canonical-only-payment-transition-candidate.sql'), 'utf8');
+assert.doesNotMatch(transition, /\blimit\s+1000\b/i, 'a per-order authoritative ledger read must not silently truncate payment operations');
 const detailed = readFileSync(path.join(root, 'remediation', 'reference-record_restaurant_payment.sql'), 'utf8');
 const voidPayment = readFileSync(path.join(root, 'remediation', 'reference-void_restaurant_payment.sql'), 'utf8');
 const fixtureAudit = `do $$ begin
