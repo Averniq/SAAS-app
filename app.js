@@ -1439,10 +1439,10 @@ function cloudOrderToLocal(row) {
   };
 }
 
-async function syncCloudOrders({ notify = true, allowDuringPayment = false } = {}) {
-  if (!staffUser?.restaurantId || cloudSyncBusy || (paymentSubmissionInProgress && !allowDuringPayment)) return;
+async function syncCloudOrders({ notify = true, allowDuringPayment = false, paymentOrderIds = null } = {}) {
+  if (!staffUser?.restaurantId || cloudSyncBusy || (paymentSubmissionInProgress && !allowDuringPayment)) return false;
   const paymentContext = paymentFinancialContext;
-  if (!paymentContextIsCurrent(paymentContext)) return;
+  if (!paymentContextIsCurrent(paymentContext)) return false;
   const paymentGeneration = paymentSubmissionGeneration;
   cloudSyncBusy = true;
   setCloudSyncStatus("syncing", "Syncing");
@@ -1450,16 +1450,24 @@ async function syncCloudOrders({ notify = true, allowDuringPayment = false } = {
   try {
     const rows = await window.TableOrderCloud.loadOrders(paymentContext.restaurantId);
     // Discard reads started before a payment; they may contain pre-payment state.
-    if (!paymentContextIsCurrent(paymentContext) || (!allowDuringPayment && paymentSubmissionInProgress) || paymentGeneration !== paymentSubmissionGeneration) return;
+    if (!paymentContextIsCurrent(paymentContext) || (!allowDuringPayment && paymentSubmissionInProgress) || paymentGeneration !== paymentSubmissionGeneration) return false;
     const cloudOrders = rows.filter((row) => !row.restaurant_id || row.restaurant_id === paymentContext.restaurantId).map(cloudOrderToLocal);
-    // Keep ledger reads bounded: hydrate only the active Front Desk table and
-    // any unresolved retry. Each order read is complete despite the RPC's
-    // restaurant-wide 1,000-operation cap, so local storage never fills gaps.
+    // Hydrate the active Front Desk table, unresolved retries, and explicit
+    // payment targets. A per-order RPC read is complete, so confirmation state
+    // never relies on a capped restaurant-wide ledger snapshot.
+    const requestedPaymentOrderIds = paymentOrderIds instanceof Set
+      ? paymentOrderIds
+      : new Set(Array.isArray(paymentOrderIds) ? paymentOrderIds : []);
     const paymentOrders = canRecordAuthoritativePayment()
-      ? cloudOrders.filter((order) => order.tableId === selectedFrontTableId || paymentContext.records[order.cloudId]?.paymentAttempt)
+      ? cloudOrders.filter((order) => requestedPaymentOrderIds.has(order.cloudId)
+        || order.tableId === selectedFrontTableId
+        || paymentContext.records[order.cloudId]?.paymentAttempt)
       : [];
     const operationGroups = await Promise.all(paymentOrders.map((order) =>
       window.TableOrderCloud.listAuthoritativePaymentOperations(order.cloudId, paymentContext.restaurantId)));
+    // A session switch or payment may happen while the ledger requests are in
+    // flight. Never apply those stale results to the new financial context.
+    if (!paymentContextIsCurrent(paymentContext) || (!allowDuringPayment && paymentSubmissionInProgress) || paymentGeneration !== paymentSubmissionGeneration) return false;
     const operations = operationGroups.flat();
     const previousByCloudId = new Map(state.orders.filter((order) => order.cloudId).map((order) => [order.cloudId, order]));
     const trackedByCloudId = new Set(state.orders.filter((order) => order.customerTracked && order.cloudId).map((order) => order.cloudId));
@@ -1509,10 +1517,12 @@ async function syncCloudOrders({ notify = true, allowDuringPayment = false } = {
         playKitchenChime().catch(() => setSoundEnabled(false));
       }
     }
+    return true;
   } catch (error) {
-    if (!paymentContextIsCurrent(paymentContext)) return;
+    if (!paymentContextIsCurrent(paymentContext)) return false;
     setCloudSyncStatus("offline", "Offline", `Sync failed · ${error.message}`);
     console.warn("Cloud order sync paused:", error.message);
+    return false;
   } finally {
     if (paymentContextIsCurrent(paymentContext)) cloudSyncBusy = false;
   }
@@ -2153,7 +2163,7 @@ async function updateOrderStatus(orderId, status) {
 }
 
 async function markOrdersPaid(orders, method = "Card") {
-  if (!orders.length || orders.some((order) => order.status === "Paid") || paymentSubmissionInProgress) return;
+  if (!orders.length || paymentSubmissionInProgress) return;
   if (!canRecordAuthoritativePayment()) {
     showOrderToast("Payment permission is not available for your role.", "warning");
     return;
@@ -2163,22 +2173,38 @@ async function markOrdersPaid(orders, method = "Card") {
     showOrderToast("Payment restaurant context is unavailable. Reload the authorized order list.", "warning");
     return;
   }
+  const requestedCloudOrderIds = orders.map((order) => order.cloudId).filter(Boolean);
+  if (!requestedCloudOrderIds.length) {
+    showOrderToast("Payments require a live order.", "warning");
+    return;
+  }
+  const hydrated = await syncCloudOrders({ notify: false, paymentOrderIds: requestedCloudOrderIds });
+  if (!hydrated || !paymentContextIsCurrent(paymentContext)) {
+    showOrderToast("The authoritative payment state could not be refreshed. Retry with the same payment attempt.", "warning");
+    return;
+  }
+  orders = requestedCloudOrderIds.map((cloudId) => state.orders.find((order) => order.cloudId === cloudId)).filter(Boolean);
+  if (orders.length !== requestedCloudOrderIds.length) {
+    showOrderToast("The requested order is no longer available. Refresh the Front Desk list before recording payment.", "warning");
+    return;
+  }
+  if (orders.some((order) => order.status === "Paid")) {
+    showOrderToast("This order is already paid according to the authoritative ledger.", "warning");
+    return;
+  }
   const reference = document.getElementById("paymentReference")?.value.trim() || "";
   const note = document.getElementById("paymentNote")?.value.trim() || "";
   if (method === "Other" && !note && orders.some((order) => !order.paymentAttempt)) {
     showOrderToast("A payment note is required when the payment method is Other.", "warning");
     return;
   }
-  const cloudOrders = orders.filter((order) => order.cloudId);
-  if (!cloudOrders.length) {
-    showOrderToast("Payments require a live order.", "warning");
-    return;
-  }
+  const cloudOrders = orders;
   const payment = { method, reference, note };
   paymentSubmissionInProgress = true;
   paymentSubmissionGeneration++;
   let confirmedCount = 0;
   const failures = [];
+  const balanceConflictOrderIds = new Set();
 
   try {
     cloudOrders.forEach((order) => { order.paymentAttempt = createPaymentAttempt(order, payment); });
@@ -2189,7 +2215,13 @@ async function markOrdersPaid(orders, method = "Card") {
     if (!paymentContextIsCurrent(paymentContext)) return;
     const paidAt = new Date().toISOString();
     results.forEach((outcome, index) => {
-      if (outcome.status === "rejected") { failures.push(outcome.reason); return; }
+      if (outcome.status === "rejected") {
+        failures.push(outcome.reason);
+        if (outcome.reason?.code === "PAYMENT_EXCEEDS_REMAINING_BALANCE" || /PAYMENT_EXCEEDS_REMAINING_BALANCE/i.test(outcome.reason?.message || "")) {
+          balanceConflictOrderIds.add(cloudOrders[index].cloudId);
+        }
+        return;
+      }
       const result = outcome.value;
       if (result.paymentStatus !== "paid" && result.paymentStatus !== "partial") { failures.push(new Error("The authoritative payment result could not be confirmed.")); return; }
       const original = cloudOrders[index];
@@ -2210,10 +2242,14 @@ async function markOrdersPaid(orders, method = "Card") {
     setCloudSyncStatus("live", "Live", cloudSyncSummary());
   } catch (error) {
     if (!paymentContextIsCurrent(paymentContext)) return;
-    const exceedsRemainingBalance = error?.code === "PAYMENT_EXCEEDS_REMAINING_BALANCE" || /PAYMENT_EXCEEDS_REMAINING_BALANCE/i.test(error?.message || "");
-    if (exceedsRemainingBalance) {
-      await syncCloudOrders({ notify: false, allowDuringPayment: true });
-      cloudOrders.forEach((original) => {
+    const exceedsRemainingBalance = balanceConflictOrderIds.size > 0
+      || error?.code === "PAYMENT_EXCEEDS_REMAINING_BALANCE"
+      || /PAYMENT_EXCEEDS_REMAINING_BALANCE/i.test(error?.message || "");
+    const reconciled = exceedsRemainingBalance
+      ? await syncCloudOrders({ notify: false, allowDuringPayment: true, paymentOrderIds: balanceConflictOrderIds })
+      : false;
+    if (reconciled) {
+      cloudOrders.filter((original) => balanceConflictOrderIds.has(original.cloudId)).forEach((original) => {
         const order = state.orders.find((entry) => entry.cloudId === original.cloudId);
         if (order?.paymentAttempt?.idempotencyKey === original.paymentAttempt?.idempotencyKey) delete order.paymentAttempt;
       });
@@ -2221,8 +2257,10 @@ async function markOrdersPaid(orders, method = "Card") {
     // Rendering/storage errors must not turn a confirmed operation into a retry.
     try { saveState(); render(); } catch (uiError) { console.warn("Payment UI refresh failed:", uiError.message); }
     setCloudSyncStatus("offline", "Offline");
-    showOrderToast(exceedsRemainingBalance
+    showOrderToast(exceedsRemainingBalance && reconciled
       ? "Payment balance changed. The authoritative remaining balance has been refreshed; review it before recording payment."
+      : exceedsRemainingBalance
+      ? "Payment balance may have changed, but the authoritative state could not be refreshed. Retry with the same payment attempt."
       : confirmedCount && !failures.length
       ? `Payment was recorded, but the display could not refresh: ${error.message}. Do not submit it again.`
       : `Payment was not confirmed for ${failures.length || "the pending"} order(s): ${error.message}. Retry will use the same payment attempt.`, "warning");
@@ -2308,6 +2346,9 @@ function renderFrontDesk() {
     button.addEventListener("click", () => {
       selectedFrontTableId = button.dataset.frontTable;
       renderFrontDesk();
+      // Render immediately for responsiveness, then replace any stale local
+      // payment projection with the complete ledger state for this table.
+      syncCloudOrders({ notify: false });
     });
   });
 

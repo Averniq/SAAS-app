@@ -106,16 +106,16 @@ test('stale sync response after restaurant/profile switch cannot replace current
   assert.deepEqual(Array.from(c.getState().orders, order => order.cloudId), ['order-b']);
 });
 test('stale payment response cannot mutate new tenant or release its active submission fence', async () => {
-  const { c, storage } = page(); await c.continueOwnerSession(); await tick(); const oldResponse = deferred(); const newResponse = deferred();
-  c.window.TableOrderCloud.recordAuthoritativePayment = () => oldResponse.promise; const oldPayment = c.markOrdersPaid(c.getState().orders);
+  const { c, storage } = page(); await c.continueOwnerSession(); await tick(); const oldResponse = deferred(); const newResponse = deferred(); let newConfirmed = false;
+  c.window.TableOrderCloud.recordAuthoritativePayment = () => oldResponse.promise; const oldPayment = c.markOrdersPaid(c.getState().orders); await tick();
   c.window.TableOrderCloud.getStaffProfile = async () => ({ id: 'user-b', role: 'cashier', restaurantId: 'tenant-b', restaurantSlug: 'tenant-b' });
   c.window.TableOrderCloud.loadOrders = async () => [row('order-b')]; await c.continueOwnerSession(); await tick();
-  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation(1000, 'order-b')];
-  c.window.TableOrderCloud.recordAuthoritativePayment = () => newResponse.promise; const newPayment = c.markOrdersPaid(c.getState().orders);
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => newConfirmed ? [ledgerOperation(1000, 'order-b')] : [];
+  c.window.TableOrderCloud.recordAuthoritativePayment = () => newResponse.promise; const newPayment = c.markOrdersPaid(c.getState().orders); await tick();
   oldResponse.resolve(paid()); await oldPayment;
   assert.equal(c.paymentSubmissionInProgress, true); assert.equal(c.getState().orders[0].confirmedPayment, undefined);
   assert.ok(JSON.parse(storage.get('aveniq-payment-financial-v1:tenant-a')).records['order-a'].paymentAttempt);
-  newResponse.resolve(paid()); await newPayment; await tick(); assert.equal(c.getState().orders[0].status, 'Paid');
+  newConfirmed = true; newResponse.resolve(paid()); await newPayment; await tick(); assert.equal(c.getState().orders[0].status, 'Paid');
 });
 test('persistence corruption or unavailable storage blocks RPC before submission', async () => {
   for (const mode of ['corrupt', 'unavailable']) {

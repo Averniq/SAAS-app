@@ -31,6 +31,7 @@ function harness(role = 'owner') {
     ${section('async function markOrdersPaid(', 'function renderKitchen(')}`, c);
   c.beginPaymentFinancialSession(c.staffUser); c.state.orders = [order];
   c.window.TableOrderCloud.loadOrders = async () => JSON.parse(JSON.stringify(c.state.orders));
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [];
   c.window.TableOrderCloud.recordAuthoritativePayment = async () => ({ paymentId: randomUUID(), paymentStatus: 'paid', amountCents: 1000 });
   return c;
 }
@@ -69,17 +70,19 @@ test('batch partial failure clears successful attempt and retains failed attempt
 test('duplicate confirm during pending response submits once', async () => {
   const c = harness(); let finish; let calls = 0;
   c.window.TableOrderCloud.recordAuthoritativePayment = () => { calls++; return new Promise(r => { finish = r; }); };
-  const pending = c.markOrdersPaid(c.state.orders); await c.markOrdersPaid(c.state.orders);
+  const pending = c.markOrdersPaid(c.state.orders); await new Promise(r => setImmediate(r)); await c.markOrdersPaid(c.state.orders);
   finish({ paymentId: randomUUID(), paymentStatus: 'paid', amountCents: 1000 }); await pending;
   assert.equal(calls, 1);
 });
-test('stale cloud response cannot overwrite a newly confirmed payment', async () => {
-  const c = harness(); let finish;
+test('an in-flight cloud refresh blocks payment rather than allowing a stale overwrite', async () => {
+  const c = harness(); let finish; let calls = 0;
   c.window.TableOrderCloud.loadOrders = () => new Promise(r => { finish = r; });
   const sync = c.syncCloudOrders({ notify: false });
+  c.window.TableOrderCloud.recordAuthoritativePayment = async () => { calls++; return { paymentId: randomUUID(), paymentStatus: 'paid', amountCents: 1000 }; };
   await c.markOrdersPaid(c.state.orders);
   finish([{ cloudId: 'order-a', status: 'New', items: [{ price: 10, quantity: 1 }] }]); await sync;
-  assert.equal(c.state.orders[0].status, 'Paid');
+  assert.equal(calls, 0);
+  assert.equal(c.state.orders[0].status, 'New');
 });
 test('failure does not release fence before another batch request settles', async () => {
   const c = harness(); c.state.orders.push({ ...c.state.orders[0], cloudId: 'order-b' });

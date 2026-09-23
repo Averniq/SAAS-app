@@ -81,14 +81,21 @@ test('02 refresh attempted while committed response waits is fenced', async () =
   c.window.TableOrderCloud.recordAuthoritativePayment = () => response.promise;
   c.window.TableOrderCloud.loadOrders = async () => { reads++; return clone(c.state.orders); };
   const pending = c.markOrdersPaid(c.state.orders);
-  await c.syncCloudOrders(); assert.equal(reads, 0);
+  await tick(); const readsBeforeBlockedRefresh = reads;
+  await c.syncCloudOrders(); assert.equal(reads, readsBeforeBlockedRefresh);
   response.resolve(paid()); await pending; await tick(); assert.equal(c.state.orders[0].status, 'Paid');
 });
-test('03 refresh begun before payment cannot overwrite confirmation', async () => {
-  const { c } = harness(); const response = deferred();
-  c.window.TableOrderCloud.loadOrders = () => response.promise;
-  const refresh = c.syncCloudOrders(); await c.markOrdersPaid(c.state.orders);
-  response.resolve([order()]); await refresh; assert.equal(c.state.orders[0].status, 'Paid');
+test('03 ledger read begun before a payment generation cannot overwrite confirmation', async () => {
+  const { c } = harness(); const ledgerRead = deferred();
+  c.window.TableOrderCloud.loadOrders = async () => [order()];
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = () => ledgerRead.promise;
+  const refresh = c.syncCloudOrders(); await tick();
+  c.paymentSubmissionGeneration++;
+  c.state.orders[0].status = 'Paid';
+  c.state.orders[0].confirmedPayment = { paidCents: 1000, remainingCents: 0 };
+  ledgerRead.resolve([]); await refresh;
+  assert.equal(c.state.orders[0].status, 'Paid');
+  assert.equal(c.state.orders[0].confirmedPayment.remainingCents, 0);
 });
 test('04 refreshes cannot complete out of order because only one runs', async () => {
   const { c } = harness(); const response = deferred(); let reads = 0;
@@ -96,12 +103,21 @@ test('04 refreshes cannot complete out of order because only one runs', async ()
   const first = c.syncCloudOrders(); await c.syncCloudOrders();
   assert.equal(reads, 1); response.resolve([order()]); await first;
 });
-test('05 mixed batch clears confirmed attempt and keeps ambiguous attempt', async () => {
+test('05 mixed batch retires only a reconciled balance-conflict attempt', async () => {
   const { c } = harness(); c.state.orders.push(order('order-b'));
-  c.window.TableOrderCloud.recordAuthoritativePayment = async id => { if (id === 'order-b') throw new Error('response lost'); return paid(); };
-  await c.markOrdersPaid(c.state.orders); await tick();
-  assert.equal(c.state.orders[0].status, 'Paid'); assert.equal(c.state.orders[0].paymentAttempt, undefined);
-  assert.ok(c.state.orders[1].paymentAttempt); assert.notEqual(c.state.orders[1].status, 'Paid');
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async id => id === 'order-a' ? [ledgerOperation(400, id)] : [];
+  c.window.TableOrderCloud.recordAuthoritativePayment = async id => {
+    if (id === 'order-a') {
+      const error = new Error('PAYMENT_EXCEEDS_REMAINING_BALANCE');
+      error.code = 'PAYMENT_EXCEEDS_REMAINING_BALANCE';
+      throw error;
+    }
+    throw new Error('response lost');
+  };
+  await c.markOrdersPaid(c.state.orders);
+  assert.equal(c.state.orders[0].paymentAttempt, undefined);
+  assert.equal(c.state.orders[0].confirmedPayment.remainingCents, 600);
+  assert.ok(c.state.orders[1].paymentAttempt, 'ambiguous request must retain its UUID');
 });
 test('06 retry after interruption keeps amount, method, note and reference', async () => {
   const { c, fields } = harness(); fields.get('paymentNote').value = 'Bank transfer'; fields.get('paymentReference').value = 'REF-1';
@@ -126,16 +142,22 @@ test('08 projection with pending UUID retains attempt until exact canonical repl
   c.window.TableOrderCloud.recordAuthoritativePayment = async () => paid({ idempotentReplay: true });
   await c.markOrdersPaid(c.state.orders); await tick(); assert.equal(c.state.orders[0].paymentAttempt, undefined);
 });
-test('09 canonical ledger refresh cannot reopen confirmed order', async () => {
-  const { c } = harness(); c.window.TableOrderCloud.loadOrders = async () => [order()];
-  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation()];
-  await c.markOrdersPaid(c.state.orders); await tick();
-  assert.equal(c.state.orders[0].status, 'Paid', 'post-confirmation refresh must preserve authoritative confirmation');
+test('09 an unselected table is hydrated before its order can be paid', async () => {
+  const { c } = harness(); const otherOrder = { ...order('order-b'), tableId: 'table-b' }; let writes = 0;
+  c.state.orders.push(otherOrder);
+  c.window.TableOrderCloud.loadOrders = async () => [order(), otherOrder];
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async id => id === 'order-b' ? [ledgerOperation(1000, id)] : [];
+  c.window.TableOrderCloud.recordAuthoritativePayment = async () => { writes++; return paid(); };
+  await c.markOrdersPaid([otherOrder]);
+  const reconciled = c.state.orders.find(order => order.cloudId === 'order-b');
+  assert.equal(writes, 0, 'the already-paid canonical order must not be submitted again');
+  assert.equal(reconciled.status, 'Paid');
+  assert.equal(reconciled.confirmedPayment.remainingCents, 0);
 });
 test('10 duplicate click sends one RPC and creates one UUID', async () => {
   const { c } = harness(); const response = deferred(); let calls = 0;
   c.window.TableOrderCloud.recordAuthoritativePayment = () => { calls++; return response.promise; };
-  const first = c.markOrdersPaid(c.state.orders); await c.markOrdersPaid(c.state.orders);
+  const first = c.markOrdersPaid(c.state.orders); await tick(); await c.markOrdersPaid(c.state.orders);
   response.resolve(paid()); await first; assert.equal(calls, 1);
 });
 test('11 rendering failure after canonical success is not reported as payment failure', async () => {
@@ -150,14 +172,14 @@ test('12 three orders reconcile independent results in request order', async () 
   const responses = [deferred(), deferred(), deferred()]; let i = 0;
   c.window.TableOrderCloud.recordAuthoritativePayment = () => responses[i++].promise;
   const batch = c.markOrdersPaid(c.state.orders);
+  await tick();
   responses[2].resolve(paid()); responses[0].resolve(paid()); responses[1].reject(new Error('lost'));
   await batch; await tick(); assert.deepEqual(Array.from(c.state.orders, o => o.status), ['Paid', 'New', 'Paid']);
 });
 test('confirmed partial response clears UUID without falsely marking order Paid', async () => {
   // Client line total is $10; authoritative total is $15 (e.g. a stale client).
   // The server accepted the sent 1000 cents and truthfully reports $5 remaining.
-  const { c } = harness(); const unresolvedLedger = deferred();
-  c.window.TableOrderCloud.listAuthoritativePaymentOperations = () => unresolvedLedger.promise;
+  const { c } = harness();
   c.window.TableOrderCloud.recordAuthoritativePayment = async () => paid({ paymentStatus: 'partial', amountCents: 1000, paidCents: 1000, remainingCents: 500 });
   await c.markOrdersPaid(c.state.orders);
   assert.notEqual(c.state.orders[0].status, 'Paid');
@@ -179,24 +201,23 @@ test('currency cents handles decimal item prices without fractional cents', () =
   }
   for (const price of [0, -1, Infinity, NaN]) assert.throws(() => c.paymentAmountCents({ items: [{ price, quantity: 1 }] }));
 });
-test('confirmed partial receipt survives stale refresh and next attempt uses remaining cents with new UUID', async () => {
-  const { c } = harness(); const sent = []; const unresolvedLedger = deferred();
-  c.window.TableOrderCloud.listAuthoritativePaymentOperations = () => unresolvedLedger.promise;
-  c.window.TableOrderCloud.loadOrders = async () => [order()];
+test('canonical partial receipt hydrates and next attempt uses remaining cents with new UUID', async () => {
+  const { c } = harness(); const sent = [];
+  const canonicalOrder = { ...order(), total: 15 };
+  c.window.TableOrderCloud.loadOrders = async () => [canonicalOrder];
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation(1000)];
   c.window.TableOrderCloud.recordAuthoritativePayment = async (_, attempt) => {
     sent.push(clone(attempt));
-    return sent.length === 1
-      ? paid({ paymentStatus: 'partial', amountCents: 1000, paidCents: 1000, remainingCents: 500 })
-      : paid({ amountCents: 500, paidCents: 1500 });
+    return paid({ amountCents: 500, paidCents: 1500 });
   };
-  await c.markOrdersPaid(c.state.orders);
+  await c.syncCloudOrders();
   assert.equal(c.state.orders[0].confirmedPayment.paidCents, 1000);
   assert.equal(c.state.orders[0].confirmedPayment.remainingCents, 500);
   assert.equal(c.state.orders[0].status, 'New');
   c.renderInvoice();
   assert.match(c.document.getElementById('invoicePanel').html, /Remaining after confirmed payments/);
   await c.markOrdersPaid(c.state.orders);
-  assert.equal(sent[1].amountCents, 500); assert.notEqual(sent[0].idempotencyKey, sent[1].idempotencyKey);
+  assert.equal(sent[0].amountCents, 500); assert.ok(sent[0].idempotencyKey);
   assert.equal(c.state.orders[0].status, 'Paid');
 });
 test('confirmed receipt persists across app reload through canonical ledger hydration', async () => {
@@ -236,9 +257,11 @@ test('repeated render failure after success settles without losing confirmed rec
 });
 test('cloud list omission cannot discard a pending UUID or confirmed receipt', async () => {
   const { c } = harness(); c.state.orders.push(order('order-b'));
-  c.window.TableOrderCloud.recordAuthoritativePayment = async id => { if (id === 'order-b') throw new Error('lost'); return paid(); };
+  c.state.orders[0].confirmedPayment = { paymentId: randomUUID(), paymentStatus: 'paid', paidCents: 1000, remainingCents: 0 };
+  c.state.orders[0].status = 'Paid';
+  c.state.orders[1].paymentAttempt = { idempotencyKey: randomUUID(), amountCents: 1000, method: 'Card', reference: '', note: '' };
   c.window.TableOrderCloud.loadOrders = async () => [];
-  await c.markOrdersPaid(c.state.orders); await tick();
+  await c.syncCloudOrders();
   assert.equal(c.state.orders.length, 2);
   assert.equal(c.state.orders.find(o => o.cloudId === 'order-a').confirmedPayment.paymentStatus, 'paid');
   assert.ok(c.state.orders.find(o => o.cloudId === 'order-b').paymentAttempt.idempotencyKey);
