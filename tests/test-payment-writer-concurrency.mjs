@@ -3,8 +3,11 @@ import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-// Intentionally fixed to the disposable local fixture: no remote URL or environment override.
-const args = ["exec", "-i", "supabase_db_p0d01final20260908", "psql", "-X", "-U", "postgres", "-d", "prod_shape_20260915", "-v", "ON_ERROR_STOP=1", "-At"];
+// Local-only disposable fixture; --database selects an already-rehearsed package.
+const databaseFlag = process.argv.indexOf("--database");
+const database = databaseFlag >= 0 ? process.argv[databaseFlag + 1] : "prod_shape_20260915";
+assert.match(database || "", /^[a-z0-9_]+$/i, "fixture database name is required");
+const args = ["exec", "-i", "supabase_db_p0d01final20260908", "psql", "-X", "-U", "postgres", "-d", database, "-v", "ON_ERROR_STOP=1", "-At"];
 const tag = `pay-concurrency-${randomUUID()}`;
 const ids = new Map();
 const fixtureId = (old) => {

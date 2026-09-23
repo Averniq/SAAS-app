@@ -1,6 +1,6 @@
 -- REVIEW-ONLY / POST-COMMIT READ-ONLY VERIFICATION.
 -- Source manifest: canonical-only-payment-transition-candidate.sql SHA-256
--- a9024a686a909d337060e5acadd51d3cf7e239f3345e60934ff85fe5c1ccbd5a
+-- 1485925dd32f002bac18582c5847dd14dbae00fb98f3014212a45a073253ea8a
 -- Run in a dedicated read-only session. This file contains no DDL or DML.
 begin read only;
 

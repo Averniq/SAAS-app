@@ -98,7 +98,7 @@ if (!successOnly) {
   driftCases.slice(driftFrom - 1, driftTo).forEach(([name, mutation, expected]) => expectRollback(name, mutation, expected));
 }
 if (!driftOnly) {
-  const { sql, unrelatedPayment } = fixture();
+  const { sql, unrelatedPayment, restaurant } = fixture();
   assert.equal(sql('select count(*) from public.payments'), '12');
   sql(transition);
   assert.equal(sql('select count(*) from public.payments'), '1');
@@ -106,6 +106,31 @@ if (!driftOnly) {
   assert.equal(sql(`select count(*) from public.orders where id in (${orders.map((order) => literal(order.order_id) + '::uuid').join(',')}) and status='completed' and payment_status='unpaid' and paid_at is null and closed_at is null and payment_method is null`), '9');
   assert.equal(sql('select count(*) from public.payment_operations'), '0');
   assert.equal(sql(`select has_function_privilege('authenticated','public.record_authoritative_payment(uuid,uuid,integer,text,text,text,uuid)','execute'),has_function_privilege('authenticated','public.list_authoritative_payment_operations(uuid,uuid)','execute'),has_function_privilege('authenticated','public.record_restaurant_order_payment(uuid,uuid,text)','execute'),has_function_privilege('authenticated','public.record_restaurant_payment(uuid,uuid,integer,text,text,uuid,uuid,integer,integer,text)','execute'),has_function_privilege('authenticated','public.void_restaurant_payment(uuid,uuid,text)','execute')`), 't|t|f|f|f');
+  const payableOrderId = orders[0].order_id;
+  const payerId = sql(`select user_id from public.restaurant_staff where restaurant_id=${literal(restaurant)}::uuid and role='owner' limit 1`);
+  const paymentContext = `begin; set local role authenticated; select set_config('request.jwt.claim.sub',${literal(payerId)},true); `;
+  assert.throws(
+    () => sql(`${paymentContext}select public.record_authoritative_payment(${literal(restaurant)}::uuid,${literal(payableOrderId)}::uuid,1,'Card',null,null); rollback;`),
+    /(IDEMPOTENCY_KEY_REQUIRED|function .*record_authoritative_payment.*does not exist)/i,
+    'omitting p_idempotency_key must not create a server-generated payment key'
+  );
+  assert.throws(
+    () => sql(`${paymentContext}select public.record_authoritative_payment(${literal(restaurant)}::uuid,${literal(payableOrderId)}::uuid,1,'Card',null,null,null); rollback;`),
+    /IDEMPOTENCY_KEY_REQUIRED/i,
+    'an explicit null key must fail closed'
+  );
+  const idempotencyKey = randomUUID();
+  const invocation = `select public.record_authoritative_payment(${literal(restaurant)}::uuid,${literal(payableOrderId)}::uuid,1,'Card','terminal','test',${literal(idempotencyKey)}::uuid);`;
+  const paymentResult = (statement) => JSON.parse(sql(statement).split(/\r?\n/).find((line) => line.startsWith('{')));
+  const first = paymentResult(`${paymentContext}${invocation} commit;`);
+  const replay = paymentResult(`${paymentContext}${invocation} commit;`);
+  assert.equal(replay.payment_operation_id, first.payment_operation_id, 'same UUID must replay one operation');
+  assert.equal(replay.idempotent_replay, true, 'same UUID must report replay');
+  assert.throws(
+    () => sql(`${paymentContext}select public.record_authoritative_payment(${literal(restaurant)}::uuid,${literal(payableOrderId)}::uuid,2,'Card','terminal','test',${literal(idempotencyKey)}::uuid); rollback;`),
+    /IDEMPOTENCY_KEY_REUSED/i,
+    'divergent reuse must fail'
+  );
   console.log('PASS success/cleanup-acl'); passed++;
 }
 const expected = successOnly ? 1 : driftOnly ? Math.max(0, Math.min(10, driftTo) - driftFrom + 1) : 11;

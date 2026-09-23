@@ -58,7 +58,7 @@ alter table public.payment_operations enable row level security;
 create policy "payment operations finance read" on public.payment_operations for select to authenticated using(public.has_restaurant_role(restaurant_id,array['owner','manager','cashier']));
 revoke all on table public.payment_operations from public,anon,authenticated;
 
-create or replace function public.record_authoritative_payment(p_restaurant_id uuid,p_order_id uuid,p_amount_cents integer,p_method text,p_reference text default '',p_note text default '',p_idempotency_key uuid default gen_random_uuid()) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+create or replace function public.record_authoritative_payment(p_restaurant_id uuid,p_order_id uuid,p_amount_cents integer,p_method text,p_reference text,p_note text,p_idempotency_key uuid) returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare v_role text; v_order public.orders; v_existing public.payment_operations; v_total integer; v_paid integer; v_fingerprint text; v_result jsonb; v_id uuid;
 begin
  if auth.uid() is null then raise exception 'AUTH_REQUIRED'; end if;

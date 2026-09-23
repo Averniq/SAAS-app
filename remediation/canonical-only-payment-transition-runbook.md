@@ -4,7 +4,7 @@ This runbook applies only to the exact committed transition candidate:
 
 ```text
 remediation/canonical-only-payment-transition-candidate.sql
-SHA-256: a9024a686a909d337060e5acadd51d3cf7e239f3345e60934ff85fe5c1ccbd5a
+SHA-256: 1485925dd32f002bac18582c5847dd14dbae00fb98f3014212a45a073253ea8a
 ```
 
 It does not authorize Production access, execution, deployment, or payment activity.
