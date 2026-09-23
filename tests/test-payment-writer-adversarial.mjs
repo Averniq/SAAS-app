@@ -7,8 +7,9 @@ import test from 'node:test';
 
 // Runs the current production functions, with deterministic transport and storage.
 // It does not start a browser, contact any service, or mutate a database.
+// This suite was introduced by 61f2033; its RED baseline is that commit's parent.
 const source = process.argv.includes('--baseline')
-  ? execFileSync('git', ['show', 'HEAD:app.js'], { encoding: 'utf8' })
+  ? execFileSync('git', ['show', 'd2c008bf8b90d4d4490807e40e998b4e0eb9cf59:app.js'], { encoding: 'utf8' })
   : readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const section = (start, end) => {
   const from = source.indexOf(start);
@@ -21,6 +22,7 @@ const clone = value => JSON.parse(JSON.stringify(value));
 const deferred = () => { let resolve; let reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 const paid = (extra = {}) => ({ paymentId: randomUUID(), paymentStatus: 'paid', amountCents: 1000, paidCents: 1000, remainingCents: 0, ...extra });
 const order = (cloudId = 'order-a') => ({ id: cloudId, cloudId, paymentRestaurantId: 'tenant-a', status: 'New', total: 10, tableId: 'table-a', createdAt: '2026-09-17T00:00:00Z', items: [{ name: 'Test dish', price: 10, quantity: 1 }] });
+const ledgerOperation = (amountCents = 1000, orderId = 'order-a') => ({ id: randomUUID(), orderId, amountCents, paymentMethod: 'Card', reference: '', note: '', recordedAt: '2026-09-23T00:00:00Z', recordedBy: 'owner-a' });
 function harness() {
   const storage = new Map();
   const fields = new Map(['paymentMethod', 'paymentReference', 'paymentNote', 'markPaid', 'printInvoice'].map(id => [id, { value: id === 'paymentMethod' ? 'Card' : '', addEventListener() {} }]));
@@ -55,6 +57,7 @@ function harness() {
   if (c.beginPaymentFinancialSession) c.beginPaymentFinancialSession(c.staffUser);
   c.state.orders = [order()];
   c.window.TableOrderCloud.loadOrders = async () => clone(c.state.orders);
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [];
   c.window.TableOrderCloud.recordAuthoritativePayment = async () => paid();
   return { c, fields };
 }
@@ -123,8 +126,9 @@ test('08 projection with pending UUID retains attempt until exact canonical repl
   c.window.TableOrderCloud.recordAuthoritativePayment = async () => paid({ idempotentReplay: true });
   await c.markOrdersPaid(c.state.orders); await tick(); assert.equal(c.state.orders[0].paymentAttempt, undefined);
 });
-test('09 stale projection fetched after confirmation cannot reopen confirmed order', async () => {
+test('09 canonical ledger refresh cannot reopen confirmed order', async () => {
   const { c } = harness(); c.window.TableOrderCloud.loadOrders = async () => [order()];
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation()];
   await c.markOrdersPaid(c.state.orders); await tick();
   assert.equal(c.state.orders[0].status, 'Paid', 'post-confirmation refresh must preserve authoritative confirmation');
 });
@@ -152,8 +156,10 @@ test('12 three orders reconcile independent results in request order', async () 
 test('confirmed partial response clears UUID without falsely marking order Paid', async () => {
   // Client line total is $10; authoritative total is $15 (e.g. a stale client).
   // The server accepted the sent 1000 cents and truthfully reports $5 remaining.
-  const { c } = harness(); c.window.TableOrderCloud.recordAuthoritativePayment = async () => paid({ paymentStatus: 'partial', amountCents: 1000, paidCents: 1000, remainingCents: 500 });
-  await c.markOrdersPaid(c.state.orders); await tick();
+  const { c } = harness(); const unresolvedLedger = deferred();
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = () => unresolvedLedger.promise;
+  c.window.TableOrderCloud.recordAuthoritativePayment = async () => paid({ paymentStatus: 'partial', amountCents: 1000, paidCents: 1000, remainingCents: 500 });
+  await c.markOrdersPaid(c.state.orders);
   assert.notEqual(c.state.orders[0].status, 'Paid');
   assert.equal(c.state.orders[0].payment.paidAt, null);
   assert.equal(c.state.orders[0].paymentAttempt, undefined, 'confirmed partial success is not ambiguous and must not replay forever');
@@ -174,7 +180,8 @@ test('currency cents handles decimal item prices without fractional cents', () =
   for (const price of [0, -1, Infinity, NaN]) assert.throws(() => c.paymentAmountCents({ items: [{ price, quantity: 1 }] }));
 });
 test('confirmed partial receipt survives stale refresh and next attempt uses remaining cents with new UUID', async () => {
-  const { c } = harness(); const sent = [];
+  const { c } = harness(); const sent = []; const unresolvedLedger = deferred();
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = () => unresolvedLedger.promise;
   c.window.TableOrderCloud.loadOrders = async () => [order()];
   c.window.TableOrderCloud.recordAuthoritativePayment = async (_, attempt) => {
     sent.push(clone(attempt));
@@ -182,20 +189,22 @@ test('confirmed partial receipt survives stale refresh and next attempt uses rem
       ? paid({ paymentStatus: 'partial', amountCents: 1000, paidCents: 1000, remainingCents: 500 })
       : paid({ amountCents: 500, paidCents: 1500 });
   };
-  await c.markOrdersPaid(c.state.orders); await tick();
+  await c.markOrdersPaid(c.state.orders);
   assert.equal(c.state.orders[0].confirmedPayment.paidCents, 1000);
   assert.equal(c.state.orders[0].confirmedPayment.remainingCents, 500);
   assert.equal(c.state.orders[0].status, 'New');
   c.renderInvoice();
   assert.match(c.document.getElementById('invoicePanel').html, /Remaining after confirmed payments/);
-  await c.markOrdersPaid(c.state.orders); await tick();
+  await c.markOrdersPaid(c.state.orders);
   assert.equal(sent[1].amountCents, 500); assert.notEqual(sent[0].idempotencyKey, sent[1].idempotencyKey);
   assert.equal(c.state.orders[0].status, 'Paid');
 });
-test('confirmed receipt persists across app reload and stale projection', async () => {
-  const { c } = harness(); await c.markOrdersPaid(c.state.orders); await tick();
+test('confirmed receipt persists across app reload through canonical ledger hydration', async () => {
+  const { c } = harness(); c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation()];
+  await c.markOrdersPaid(c.state.orders); await tick();
   const { c: reloaded } = harness(); reloaded.state.orders = JSON.parse(c.snapshots.at(-1));
   reloaded.window.TableOrderCloud.loadOrders = async () => [order()];
+  reloaded.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation()];
   await reloaded.syncCloudOrders(); assert.equal(reloaded.state.orders[0].status, 'Paid');
   assert.equal(reloaded.state.orders[0].confirmedPayment.remainingCents, 0);
 });

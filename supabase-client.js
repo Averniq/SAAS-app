@@ -494,6 +494,29 @@
     };
   }
 
+  async function listAuthoritativePaymentOperations(orderId = null, restaurantId) {
+    const session = await getSession();
+    const tenantId = restaurantId || activeMembership?.restaurantId || activePlatformDashboard?.restaurantId;
+    if (!session || !tenantId) throw new Error("Restaurant context is missing.");
+    if (orderId !== null && !isUuid(orderId)) throw new Error("A valid order id is required.");
+    const result = await request("rpc/list_authoritative_payment_operations", {
+      method: "POST",
+      accessToken: session.access_token,
+      body: JSON.stringify({ p_restaurant_id: tenantId, p_order_id: orderId })
+    });
+    if (!Array.isArray(result) || result.some((entry) => !isUuid(entry?.id) || !isUuid(entry?.order_id)
+        || !Number.isSafeInteger(entry?.amount_cents) || entry.amount_cents <= 0
+        || !["Cash", "Card", "EFTPOS", "Other"].includes(entry?.payment_method)
+        || typeof entry.payment_reference !== "string" || typeof entry.note !== "string"
+        || typeof entry.recorded_at !== "string" || Number.isNaN(Date.parse(entry.recorded_at))
+        || !isUuid(entry.recorded_by))) {
+      throw new Error("Payment ledger response could not be verified. Payment is unavailable until it can be refreshed.");
+    }
+    return result.map((entry) => ({ id: entry.id, orderId: entry.order_id, amountCents: entry.amount_cents,
+      paymentMethod: entry.payment_method, reference: entry.payment_reference, note: entry.note,
+      recordedAt: entry.recorded_at, recordedBy: entry.recorded_by }));
+  }
+
   function updateMenuItemPhoto(id, photoUrl, restaurantId) { return scopedPatch("menu_items", id, restaurantId, { image_url: photoUrl || "", photo_url: photoUrl || "" }); }
   function updateMenuItemSoldOut(id, soldOut, restaurantId) { return scopedPatch("menu_items", id, restaurantId, { sold_out: Boolean(soldOut), is_available: !soldOut }); }
   function deactivateMenuItem(id, restaurantId) { return scopedPatch("menu_items", id, restaurantId, { is_active: false, is_available: false }); }
@@ -525,7 +548,7 @@
   window.TableOrderCloud = {
     config, routeContext, request, checkConnection, loadRestaurantData, bootstrapMenu, submitOrder, loadCustomerOrderStatus,
     issuePublicQrTableToken, getPublicQrTableTokenMetadata, getPublicQrOrderContext, submitPublicQrOrder, getPublicQrOrderStatus,
-    loadOrders, updateOrderStatus, recordAuthoritativePayment, updateMenuItemPhoto, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
+    loadOrders, updateOrderStatus, recordAuthoritativePayment, listAuthoritativePaymentOperations, updateMenuItemPhoto, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
     loadReportDashboard, loadSalesReport, loadMenuReport, loadTableReport, loadHourlyReport, loadOrderReport,
     createRestaurantTable, updateRestaurantTable, deactivateRestaurantTable, updateRestaurantProfile,
     signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, getPlatformDashboardProfile, signOut,

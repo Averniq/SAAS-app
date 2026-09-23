@@ -724,7 +724,7 @@ function orderTotal(order) {
 function paymentAmountCents(order) {
   const amountCents = order.confirmedPayment
     ? order.confirmedPayment.remainingCents
-    : Math.round((orderTotal(order) + Number.EPSILON) * 100);
+    : Math.round(((Number.isFinite(Number(order.total)) && Number(order.total) > 0 ? Number(order.total) : orderTotal(order)) + Number.EPSILON) * 100);
   if (!Number.isSafeInteger(amountCents) || amountCents <= 0) throw new Error("The order total is not a valid payment amount.");
   return amountCents;
 }
@@ -810,15 +810,36 @@ function restoreOrderFinancialState(order, context) {
   if (!record) return;
   context.persisted[order.cloudId] = JSON.stringify(record);
   if (record.paymentAttempt) order.paymentAttempt = record.paymentAttempt;
-  if (record.confirmedPayment) {
-    const receipt = record.confirmedPayment;
-    order.confirmedPayment = receipt;
-    order.payment = { method: receipt.method, paidAt: receipt.paymentStatus === "paid" ? receipt.confirmedAt : null, id: receipt.paymentId, amountCents: receipt.amountCents };
-    if (receipt.paymentStatus === "paid") {
-      order.status = "Paid";
-      order.closedAt = receipt.confirmedAt;
+}
+
+function applyAuthoritativePaymentOperations(cloudOrders, operations, context) {
+  const operationsByOrder = new Map();
+  operations.forEach((operation) => operationsByOrder.set(operation.orderId, [...(operationsByOrder.get(operation.orderId) || []), operation]));
+  cloudOrders.forEach((order) => {
+    const orderOperations = operationsByOrder.get(order.cloudId) || [];
+    const record = context.records[order.cloudId];
+    if (!orderOperations.length) {
+      order.payment = null;
+      if (record?.confirmedPayment) {
+        delete record.confirmedPayment;
+        if (Object.keys(record).length) context.persisted[order.cloudId] = JSON.stringify(record);
+        else { delete context.records[order.cloudId]; delete context.persisted[order.cloudId]; }
+      }
+      return;
     }
-  }
+    const paidCents = orderOperations.reduce((sum, operation) => sum + operation.amountCents, 0);
+    const totalCents = Math.round(((Number.isFinite(Number(order.total)) && Number(order.total) > 0 ? Number(order.total) : orderTotal(order)) + Number.EPSILON) * 100);
+    if (!Number.isSafeInteger(paidCents) || paidCents <= 0 || paidCents > totalCents) {
+      throw new Error("Payment ledger state could not be reconciled. Payment is unavailable until it can be refreshed.");
+    }
+    const latest = [...orderOperations].sort((left, right) => Date.parse(right.recordedAt) - Date.parse(left.recordedAt) || right.id.localeCompare(left.id))[0];
+    const remainingCents = totalCents - paidCents;
+    const paymentStatus = remainingCents === 0 ? "paid" : "partial";
+    order.confirmedPayment = { paymentId: latest.id, amountCents: latest.amountCents, paidCents, remainingCents, paymentStatus,
+      idempotencyKey: record?.confirmedPayment?.idempotencyKey || "", method: latest.paymentMethod, confirmedAt: latest.recordedAt };
+    order.payment = { method: latest.paymentMethod, paidAt: paymentStatus === "paid" ? latest.recordedAt : null, id: latest.id, amountCents: latest.amountCents };
+    if (paymentStatus === "paid") { order.status = "Paid"; order.closedAt = latest.recordedAt; }
+  });
 }
 
 function tableTokenFromUrl() {
@@ -1418,8 +1439,8 @@ function cloudOrderToLocal(row) {
   };
 }
 
-async function syncCloudOrders({ notify = true } = {}) {
-  if (!staffUser?.restaurantId || cloudSyncBusy || paymentSubmissionInProgress) return;
+async function syncCloudOrders({ notify = true, allowDuringPayment = false } = {}) {
+  if (!staffUser?.restaurantId || cloudSyncBusy || (paymentSubmissionInProgress && !allowDuringPayment)) return;
   const paymentContext = paymentFinancialContext;
   if (!paymentContextIsCurrent(paymentContext)) return;
   const paymentGeneration = paymentSubmissionGeneration;
@@ -1429,8 +1450,17 @@ async function syncCloudOrders({ notify = true } = {}) {
   try {
     const rows = await window.TableOrderCloud.loadOrders(paymentContext.restaurantId);
     // Discard reads started before a payment; they may contain pre-payment state.
-    if (!paymentContextIsCurrent(paymentContext) || paymentSubmissionInProgress || paymentGeneration !== paymentSubmissionGeneration) return;
+    if (!paymentContextIsCurrent(paymentContext) || (!allowDuringPayment && paymentSubmissionInProgress) || paymentGeneration !== paymentSubmissionGeneration) return;
     const cloudOrders = rows.filter((row) => !row.restaurant_id || row.restaurant_id === paymentContext.restaurantId).map(cloudOrderToLocal);
+    // Keep ledger reads bounded: hydrate only the active Front Desk table and
+    // any unresolved retry. Each order read is complete despite the RPC's
+    // restaurant-wide 1,000-operation cap, so local storage never fills gaps.
+    const paymentOrders = canRecordAuthoritativePayment()
+      ? cloudOrders.filter((order) => order.tableId === selectedFrontTableId || paymentContext.records[order.cloudId]?.paymentAttempt)
+      : [];
+    const operationGroups = await Promise.all(paymentOrders.map((order) =>
+      window.TableOrderCloud.listAuthoritativePaymentOperations(order.cloudId, paymentContext.restaurantId)));
+    const operations = operationGroups.flat();
     const previousByCloudId = new Map(state.orders.filter((order) => order.cloudId).map((order) => [order.cloudId, order]));
     const trackedByCloudId = new Set(state.orders.filter((order) => order.customerTracked && order.cloudId).map((order) => order.cloudId));
     cloudOrders.forEach((order) => {
@@ -1443,19 +1473,14 @@ async function syncCloudOrders({ notify = true } = {}) {
         order.status = previous.status;
       }
       if (previous?.confirmedPayment) {
-        order.confirmedPayment = previous.confirmedPayment;
-        order.payment = previous.payment;
         // A failed persistence write may leave the just-confirmed UUID on disk.
         // Do not remove a distinct newer partial-payment attempt.
         if (!previous.paymentAttempt && order.paymentAttempt?.idempotencyKey === previous.confirmedPayment.idempotencyKey) {
           delete order.paymentAttempt;
         }
-        if (previous.confirmedPayment.paymentStatus === "paid") {
-          order.status = "Paid";
-          order.closedAt = previous.closedAt;
-        }
       }
     });
+    applyAuthoritativePaymentOperations(paymentOrders, operations, paymentContext);
     const cloudIds = new Set(cloudOrders.map((order) => order.cloudId));
     const localOnlyOrders = state.orders.filter((order) => {
       if (order.paymentAttempt || order.confirmedPayment) {
@@ -2185,10 +2210,20 @@ async function markOrdersPaid(orders, method = "Card") {
     setCloudSyncStatus("live", "Live", cloudSyncSummary());
   } catch (error) {
     if (!paymentContextIsCurrent(paymentContext)) return;
+    const exceedsRemainingBalance = error?.code === "PAYMENT_EXCEEDS_REMAINING_BALANCE" || /PAYMENT_EXCEEDS_REMAINING_BALANCE/i.test(error?.message || "");
+    if (exceedsRemainingBalance) {
+      await syncCloudOrders({ notify: false, allowDuringPayment: true });
+      cloudOrders.forEach((original) => {
+        const order = state.orders.find((entry) => entry.cloudId === original.cloudId);
+        if (order?.paymentAttempt?.idempotencyKey === original.paymentAttempt?.idempotencyKey) delete order.paymentAttempt;
+      });
+    }
     // Rendering/storage errors must not turn a confirmed operation into a retry.
     try { saveState(); render(); } catch (uiError) { console.warn("Payment UI refresh failed:", uiError.message); }
     setCloudSyncStatus("offline", "Offline");
-    showOrderToast(confirmedCount && !failures.length
+    showOrderToast(exceedsRemainingBalance
+      ? "Payment balance changed. The authoritative remaining balance has been refreshed; review it before recording payment."
+      : confirmedCount && !failures.length
       ? `Payment was recorded, but the display could not refresh: ${error.message}. Do not submit it again.`
       : `Payment was not confirmed for ${failures.length || "the pending"} order(s): ${error.message}. Retry will use the same payment attempt.`, "warning");
   } finally {

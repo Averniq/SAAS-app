@@ -13,6 +13,11 @@ let canonicalResponse = {
   payment_id: "30000000-0000-4000-8000-000000000001", amount_cents: 2150, paid_cents: 2150,
   remaining_cents: 0, payment_status: "paid", idempotent_replay: false
 };
+let canonicalOperations = [{
+  id: "30000000-0000-4000-8000-000000000002", order_id: "40000000-0000-4000-8000-000000000001",
+  amount_cents: 2150, payment_method: "Card", payment_reference: "TERM-1", note: "", recorded_at: "2026-09-23T00:00:00Z",
+  recorded_by: "10000000-0000-4000-8000-000000000001"
+}];
 const response = (data) => ({ ok: true, text: async () => JSON.stringify(data) });
 const window = {
   TABLEORDER_SUPABASE: { url: "https://local.example.invalid", publishableKey: "local-publishable" },
@@ -25,14 +30,26 @@ const context = vm.createContext({ window, URLSearchParams, fetch: async (url, o
   if (rejectCanonical && url.endsWith('/rpc/record_authoritative_payment')) throw new Error('ambiguous network failure');
   if (url.includes("restaurant_staff?")) return response([{ restaurant_id: "20000000-0000-4000-8000-000000000001", role: "cashier", restaurants: { slug: "sake-street", name: "Sake Street", status: "active" } }]);
   if (url.endsWith("/rpc/record_authoritative_payment")) return response(canonicalResponse);
+  if (url.endsWith("/rpc/list_authoritative_payment_operations")) return response(canonicalOperations);
   throw new Error(`Unexpected request: ${url}`);
 }});
+// The canonical client adapter was introduced by d2c008b; use its parent as RED baseline.
 const source = process.argv.includes('--baseline')
-  ? execFileSync('git', ['show', 'HEAD:supabase-client.js'], { encoding: 'utf8' })
+  ? execFileSync('git', ['show', 'c07f440c750abb6d82a83bfbeefe6a4bc742f7e8:supabase-client.js'], { encoding: 'utf8' })
   : readFileSync(new URL("../supabase-client.js", import.meta.url), "utf8");
 vm.runInContext(source, context);
 
 await window.TableOrderCloud.getStaffProfile();
+const operations = await window.TableOrderCloud.listAuthoritativePaymentOperations("40000000-0000-4000-8000-000000000001");
+assert.deepEqual(JSON.parse(JSON.stringify(operations)), [{
+  id: "30000000-0000-4000-8000-000000000002", orderId: "40000000-0000-4000-8000-000000000001",
+  amountCents: 2150, paymentMethod: "Card", reference: "TERM-1", note: "", recordedAt: "2026-09-23T00:00:00Z",
+  recordedBy: "10000000-0000-4000-8000-000000000001"
+}]);
+const list = requests.find((entry) => entry.url.endsWith("/rpc/list_authoritative_payment_operations"));
+assert.deepEqual(JSON.parse(list.options.body), {
+  p_restaurant_id: "20000000-0000-4000-8000-000000000001", p_order_id: "40000000-0000-4000-8000-000000000001"
+});
 const payment = await window.TableOrderCloud.recordAuthoritativePayment("40000000-0000-4000-8000-000000000001", {
   amountCents: 2150, method: "Card", reference: "TERM-1", note: "", idempotencyKey: "50000000-0000-4000-8000-000000000001"
 });

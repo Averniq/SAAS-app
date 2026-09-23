@@ -8,15 +8,16 @@ const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const section = (start, end) => { const i = source.indexOf(start); const j = source.indexOf(end, i); assert.ok(i >= 0 && j > i); return source.slice(i, j); };
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const clone = value => JSON.parse(JSON.stringify(value));
-const row = id => ({ cloudId: id, id, status: 'New', items: [{ price: 10, quantity: 1 }], createdAt: '2026-09-17' });
+const row = id => ({ cloudId: id, id, tableId: 'table-a', status: 'New', items: [{ price: 10, quantity: 1 }], createdAt: '2026-09-17' });
 const paid = () => ({ paymentId: randomUUID(), paymentStatus: 'paid', amountCents: 1000, paidCents: 1000, remainingCents: 0 });
+const ledgerOperation = (amountCents = 1000, orderId = 'order-a') => ({ id: randomUUID(), orderId, amountCents, paymentMethod: 'Card', reference: '', note: '', recordedAt: '2026-09-23T00:00:00Z', recordedBy: 'user-a' });
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 function page(storage = new Map(), restaurantId = 'tenant-a') {
   const profile = { id: 'user-a', role: 'owner', restaurantId, restaurantSlug: restaurantId, restaurantName: restaurantId };
   const c = vm.createContext({
     APP_ROUTE: { area: 'frontdesk', restaurantSlug: restaurantId }, MENU_VERSION: 1, defaultRestaurant: {},
     isAuthenticatedDashboardRoute: () => true, isCanonicalPublicOrderRoute: () => false,
-    selectedTableId: '', localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) }, STORAGE_KEY: 'app-state',
+    selectedTableId: '', selectedFrontTableId: '', localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) }, STORAGE_KEY: 'app-state',
     paymentFinancialContext: null, staffUser: null, onboardingRestaurant: null,
     paymentSubmissionInProgress: false, paymentSubmissionGeneration: 0,
     cloudSyncTimer: null, cloudSyncBusy: false, cloudSyncInitialized: false, knownCloudOrderIds: new Set(), lastCloudSyncAt: null, soundEnabled: false,
@@ -37,6 +38,8 @@ function page(storage = new Map(), restaurantId = 'tenant-a') {
     function loadCloudDataIntoApp(){ saveState(); return Promise.resolve(true); }
     globalThis.getState = () => state;`, c);
   c.window.TableOrderCloud.loadOrders = async () => [row('order-a')];
+  c.selectedFrontTableId = 'table-a';
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [];
   return { c, storage, profile };
 }
 test('actual dashboard initializer and owner-session bootstrap restore persisted UUID after catalogue save', async () => {
@@ -87,8 +90,10 @@ test('legacy unscoped application storage is not imported as financial proof', a
 });
 test('confirmed receipt survives actual owner-session reload', async () => {
   const { c, storage } = page(); await c.continueOwnerSession(); await tick();
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation()];
   c.window.TableOrderCloud.recordAuthoritativePayment = async () => paid(); await c.markOrdersPaid(c.getState().orders); await tick();
-  const { c: reloaded } = page(storage); await reloaded.continueOwnerSession(); await tick();
+  const { c: reloaded } = page(storage); reloaded.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation()];
+  await reloaded.continueOwnerSession(); await tick();
   assert.equal(reloaded.getState().orders[0].status, 'Paid'); assert.equal(reloaded.getState().orders[0].paymentAttempt, undefined);
 });
 test('stale sync response after restaurant/profile switch cannot replace current orders', async () => {
@@ -96,6 +101,7 @@ test('stale sync response after restaurant/profile switch cannot replace current
   c.window.TableOrderCloud.loadOrders = () => response.promise; const oldSync = c.syncCloudOrders();
   c.window.TableOrderCloud.getStaffProfile = async () => ({ id: 'user-b', role: 'owner', restaurantId: 'tenant-b', restaurantSlug: 'tenant-b' });
   c.window.TableOrderCloud.loadOrders = async () => [row('order-b')]; await c.continueOwnerSession(); await tick();
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation(1000, 'order-b')];
   response.resolve([row('order-a')]); await oldSync;
   assert.deepEqual(Array.from(c.getState().orders, order => order.cloudId), ['order-b']);
 });
@@ -104,6 +110,7 @@ test('stale payment response cannot mutate new tenant or release its active subm
   c.window.TableOrderCloud.recordAuthoritativePayment = () => oldResponse.promise; const oldPayment = c.markOrdersPaid(c.getState().orders);
   c.window.TableOrderCloud.getStaffProfile = async () => ({ id: 'user-b', role: 'cashier', restaurantId: 'tenant-b', restaurantSlug: 'tenant-b' });
   c.window.TableOrderCloud.loadOrders = async () => [row('order-b')]; await c.continueOwnerSession(); await tick();
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation(1000, 'order-b')];
   c.window.TableOrderCloud.recordAuthoritativePayment = () => newResponse.promise; const newPayment = c.markOrdersPaid(c.getState().orders);
   oldResponse.resolve(paid()); await oldPayment;
   assert.equal(c.paymentSubmissionInProgress, true); assert.equal(c.getState().orders[0].confirmedPayment, undefined);
@@ -139,6 +146,7 @@ test('observed competing same-order UUID fails closed before second RPC', async 
 });
 test('temporary persistence failure after canonical confirmation cannot resurrect confirmed UUID', async () => {
   const { c, storage } = page(); await c.continueOwnerSession(); await tick();
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation()];
   const write = c.localStorage.setItem; let rejected = 0;
   c.window.TableOrderCloud.recordAuthoritativePayment = async () => {
     c.localStorage.setItem = (key, value) => {
@@ -163,6 +171,7 @@ test('public-route staff sync and logout preserve unsent local and tracked custo
 });
 test('confirmed partial UUID does not clear a distinct subsequent ambiguous attempt', async () => {
   const { c } = page(); await c.continueOwnerSession(); await tick();
+  c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation(500)];
   c.window.TableOrderCloud.recordAuthoritativePayment = async () => ({ ...paid(), paymentStatus: 'partial', remainingCents: 500 });
   await c.markOrdersPaid(c.getState().orders); await tick();
   const confirmedKey = c.getState().orders[0].confirmedPayment.idempotencyKey;
