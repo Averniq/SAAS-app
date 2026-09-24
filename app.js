@@ -346,6 +346,9 @@ let reportData = {};
 let reportLoading = false;
 let reportError = "";
 let reportRequestId = 0;
+let paymentSubmissionInProgress = false;
+let paymentSubmissionGeneration = 0;
+let paymentFinancialContext = null;
 
 const CUSTOMER_ORDER_STEPS = [
   { status: "New", label: "Received" },
@@ -425,6 +428,7 @@ function saveState() {
     return;
   }
   if (["order", "legacy-order"].includes(APP_ROUTE.area)) return;
+  persistPaymentFinancialState();
   state.selectedTableId = selectedTableId;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -715,6 +719,127 @@ function orderTax(order) {
 
 function orderTotal(order) {
   return orderLineTotal(order);
+}
+
+function paymentAmountCents(order) {
+  const amountCents = order.confirmedPayment
+    ? order.confirmedPayment.remainingCents
+    : Math.round(((Number.isFinite(Number(order.total)) && Number(order.total) > 0 ? Number(order.total) : orderTotal(order)) + Number.EPSILON) * 100);
+  if (!Number.isSafeInteger(amountCents) || amountCents <= 0) throw new Error("The order total is not a valid payment amount.");
+  return amountCents;
+}
+
+function canRecordAuthoritativePayment() {
+  return ["owner", "manager", "cashier"].includes(staffUser?.role);
+}
+
+function createPaymentAttempt(order, payment) {
+  const existing = order.paymentAttempt;
+  if (existing?.idempotencyKey && Number.isSafeInteger(existing.amountCents)) return existing;
+  return {
+    idempotencyKey: createPublicOrderIdempotencyKey(),
+    amountCents: paymentAmountCents(order),
+    method: payment.method,
+    reference: payment.reference,
+    note: payment.note
+  };
+}
+
+function paymentContextIsCurrent(context) {
+  return Boolean(context && paymentFinancialContext === context && staffUser === context.profile
+    && staffUser.restaurantId === context.restaurantId);
+}
+
+function preservedCustomerOrders() {
+  if (isAuthenticatedDashboardRoute()) return [];
+  return state.orders.filter((order) => !order.paymentAttempt && !order.confirmedPayment
+    && (!order.cloudId || order.cloudStatus === "local" || order.customerTracked));
+}
+
+function beginPaymentFinancialSession(profile) {
+  if (paymentContextIsCurrent(paymentFinancialContext)) return;
+  paymentFinancialContext = null;
+  paymentSubmissionInProgress = false;
+  paymentSubmissionGeneration++;
+  cloudSyncBusy = false;
+  state.orders = preservedCustomerOrders();
+  const key = `aveniq-payment-financial-v1:${profile.restaurantId}`;
+  // Hydrate only financial state. The dashboard catalogue/order list stays blank
+  // until authorized cloud rows arrive; legacy unscoped storage is not imported.
+  const records = readPaymentFinancialRecords(key, profile.restaurantId);
+  paymentFinancialContext = { profile, restaurantId: profile.restaurantId, key, records, persisted: {} };
+}
+
+function readPaymentFinancialRecords(key, restaurantId) {
+  const saved = JSON.parse(localStorage.getItem(key) || "null");
+  if (saved === null) return {};
+  if (saved.restaurantId !== restaurantId || !saved.records || typeof saved.records !== "object" || Array.isArray(saved.records)) {
+    throw new Error("Stored payment state is invalid. Payment is unavailable until the stored state is reviewed.");
+  }
+  return saved.records;
+}
+
+function persistPaymentFinancialState() {
+  const context = paymentFinancialContext;
+  if (!paymentContextIsCurrent(context)) return;
+  const records = readPaymentFinancialRecords(context.key, context.restaurantId);
+  const fingerprints = { ...context.persisted };
+  for (const order of state.orders) {
+    if (!order.cloudId || order.paymentRestaurantId !== context.restaurantId) continue;
+    if (order.paymentAttempt || order.confirmedPayment) {
+      const record = { paymentAttempt: order.paymentAttempt, confirmedPayment: order.confirmedPayment };
+      const serialized = JSON.stringify(record);
+      if (context.persisted[order.cloudId] === serialized) continue;
+      const stored = records[order.cloudId];
+      if (order.paymentAttempt && ((stored?.paymentAttempt && stored.paymentAttempt.idempotencyKey !== order.paymentAttempt.idempotencyKey)
+        || stored?.confirmedPayment?.paymentStatus === "paid")) {
+        throw new Error("Another payment attempt or confirmed payment exists for this order. Reload before continuing.");
+      }
+      records[order.cloudId] = record;
+      fingerprints[order.cloudId] = serialized;
+    }
+  }
+  localStorage.setItem(context.key, JSON.stringify({ restaurantId: context.restaurantId, records }));
+  context.records = records;
+  context.persisted = fingerprints;
+}
+
+function restoreOrderFinancialState(order, context) {
+  order.paymentRestaurantId = context.restaurantId;
+  const record = context.records[order.cloudId];
+  if (!record) return;
+  context.persisted[order.cloudId] = JSON.stringify(record);
+  if (record.paymentAttempt) order.paymentAttempt = record.paymentAttempt;
+}
+
+function applyAuthoritativePaymentOperations(cloudOrders, operations, context) {
+  const operationsByOrder = new Map();
+  operations.forEach((operation) => operationsByOrder.set(operation.orderId, [...(operationsByOrder.get(operation.orderId) || []), operation]));
+  cloudOrders.forEach((order) => {
+    const orderOperations = operationsByOrder.get(order.cloudId) || [];
+    const record = context.records[order.cloudId];
+    if (!orderOperations.length) {
+      order.payment = null;
+      if (record?.confirmedPayment) {
+        delete record.confirmedPayment;
+        if (Object.keys(record).length) context.persisted[order.cloudId] = JSON.stringify(record);
+        else { delete context.records[order.cloudId]; delete context.persisted[order.cloudId]; }
+      }
+      return;
+    }
+    const paidCents = orderOperations.reduce((sum, operation) => sum + operation.amountCents, 0);
+    const totalCents = Math.round(((Number.isFinite(Number(order.total)) && Number(order.total) > 0 ? Number(order.total) : orderTotal(order)) + Number.EPSILON) * 100);
+    if (!Number.isSafeInteger(paidCents) || paidCents <= 0 || paidCents > totalCents) {
+      throw new Error("Payment ledger state could not be reconciled. Payment is unavailable until it can be refreshed.");
+    }
+    const latest = [...orderOperations].sort((left, right) => Date.parse(right.recordedAt) - Date.parse(left.recordedAt) || right.id.localeCompare(left.id))[0];
+    const remainingCents = totalCents - paidCents;
+    const paymentStatus = remainingCents === 0 ? "paid" : "partial";
+    order.confirmedPayment = { paymentId: latest.id, amountCents: latest.amountCents, paidCents, remainingCents, paymentStatus,
+      idempotencyKey: record?.confirmedPayment?.idempotencyKey || "", method: latest.paymentMethod, confirmedAt: latest.recordedAt };
+    order.payment = { method: latest.paymentMethod, paidAt: paymentStatus === "paid" ? latest.recordedAt : null, id: latest.id, amountCents: latest.amountCents };
+    if (paymentStatus === "paid") { order.status = "Paid"; order.closedAt = latest.recordedAt; }
+  });
 }
 
 function tableTokenFromUrl() {
@@ -1289,6 +1414,7 @@ function cloudOrderToLocal(row) {
     cloudId: row.id,
     number: row.order_number,
     tableId: relatedTable?.local_id || table?.id || row.table_id,
+    // Legacy timestamps are not proof of an authoritative ledger payment.
     status: statusFromDatabase[row.status] || row.status,
     customerName: row.customer_name || "",
     note: row.note || "",
@@ -1313,20 +1439,64 @@ function cloudOrderToLocal(row) {
   };
 }
 
-async function syncCloudOrders({ notify = true } = {}) {
-  if (!staffUser?.restaurantId || cloudSyncBusy) return;
+async function syncCloudOrders({ notify = true, allowDuringPayment = false, paymentOrderIds = null } = {}) {
+  if (!staffUser?.restaurantId || cloudSyncBusy || (paymentSubmissionInProgress && !allowDuringPayment)) return false;
+  const paymentContext = paymentFinancialContext;
+  if (!paymentContextIsCurrent(paymentContext)) return false;
+  const paymentGeneration = paymentSubmissionGeneration;
   cloudSyncBusy = true;
   setCloudSyncStatus("syncing", "Syncing");
 
   try {
-    const rows = await window.TableOrderCloud.loadOrders(staffUser.restaurantId);
-    const cloudOrders = rows.map(cloudOrderToLocal);
+    const rows = await window.TableOrderCloud.loadOrders(paymentContext.restaurantId);
+    // Discard reads started before a payment; they may contain pre-payment state.
+    if (!paymentContextIsCurrent(paymentContext) || (!allowDuringPayment && paymentSubmissionInProgress) || paymentGeneration !== paymentSubmissionGeneration) return false;
+    const cloudOrders = rows.filter((row) => !row.restaurant_id || row.restaurant_id === paymentContext.restaurantId).map(cloudOrderToLocal);
+    // Hydrate the active Front Desk table, unresolved retries, and explicit
+    // payment targets. A per-order RPC read is complete, so confirmation state
+    // never relies on a capped restaurant-wide ledger snapshot.
+    const requestedPaymentOrderIds = paymentOrderIds instanceof Set
+      ? paymentOrderIds
+      : new Set(Array.isArray(paymentOrderIds) ? paymentOrderIds : []);
+    const paymentOrders = canRecordAuthoritativePayment()
+      ? cloudOrders.filter((order) => requestedPaymentOrderIds.has(order.cloudId)
+        || order.tableId === selectedFrontTableId
+        || paymentContext.records[order.cloudId]?.paymentAttempt)
+      : [];
+    const operationGroups = await Promise.all(paymentOrders.map((order) =>
+      window.TableOrderCloud.listAuthoritativePaymentOperations(order.cloudId, paymentContext.restaurantId)));
+    // A session switch or payment may happen while the ledger requests are in
+    // flight. Never apply those stale results to the new financial context.
+    if (!paymentContextIsCurrent(paymentContext) || (!allowDuringPayment && paymentSubmissionInProgress) || paymentGeneration !== paymentSubmissionGeneration) return false;
+    const operations = operationGroups.flat();
+    const previousByCloudId = new Map(state.orders.filter((order) => order.cloudId).map((order) => [order.cloudId, order]));
     const trackedByCloudId = new Set(state.orders.filter((order) => order.customerTracked && order.cloudId).map((order) => order.cloudId));
     cloudOrders.forEach((order) => {
+      restoreOrderFinancialState(order, paymentContext);
       if (trackedByCloudId.has(order.cloudId)) order.customerTracked = true;
+      const previous = previousByCloudId.get(order.cloudId);
+      if (previous?.paymentAttempt) {
+        order.paymentAttempt = previous.paymentAttempt;
+        // A method/timestamp projection does not confirm this UUID. Allow replay.
+        order.status = previous.status;
+      }
+      if (previous?.confirmedPayment) {
+        // A failed persistence write may leave the just-confirmed UUID on disk.
+        // Do not remove a distinct newer partial-payment attempt.
+        if (!previous.paymentAttempt && order.paymentAttempt?.idempotencyKey === previous.confirmedPayment.idempotencyKey) {
+          delete order.paymentAttempt;
+        }
+      }
     });
+    applyAuthoritativePaymentOperations(paymentOrders, operations, paymentContext);
     const cloudIds = new Set(cloudOrders.map((order) => order.cloudId));
-    const localOnlyOrders = state.orders.filter((order) => !order.cloudId || (!cloudIds.has(order.cloudId) && order.cloudStatus === "local"));
+    const localOnlyOrders = state.orders.filter((order) => {
+      if (order.paymentAttempt || order.confirmedPayment) {
+        return order.paymentRestaurantId === paymentContext.restaurantId && !cloudIds.has(order.cloudId);
+      }
+      return !order.cloudId || (!cloudIds.has(order.cloudId)
+        && (order.cloudStatus === "local" || (!isAuthenticatedDashboardRoute() && order.customerTracked)));
+    });
     const newOrders = cloudSyncInitialized
       ? cloudOrders.filter((order) => order.status === "New" && !knownCloudOrderIds.has(order.cloudId))
       : [];
@@ -1347,15 +1517,19 @@ async function syncCloudOrders({ notify = true } = {}) {
         playKitchenChime().catch(() => setSoundEnabled(false));
       }
     }
+    return true;
   } catch (error) {
+    if (!paymentContextIsCurrent(paymentContext)) return false;
     setCloudSyncStatus("offline", "Offline", `Sync failed · ${error.message}`);
     console.warn("Cloud order sync paused:", error.message);
+    return false;
   } finally {
-    cloudSyncBusy = false;
+    if (paymentContextIsCurrent(paymentContext)) cloudSyncBusy = false;
   }
 }
 
 function startCloudOrderSync() {
+  beginPaymentFinancialSession(staffUser);
   window.clearInterval(cloudSyncTimer);
   cloudSyncInitialized = false;
   knownCloudOrderIds = new Set();
@@ -1370,6 +1544,10 @@ function stopCloudOrderSync() {
   cloudSyncInitialized = false;
   knownCloudOrderIds = new Set();
   lastCloudSyncAt = null;
+  paymentFinancialContext = null;
+  paymentSubmissionInProgress = false;
+  paymentSubmissionGeneration++;
+  state.orders = preservedCustomerOrders();
   setCloudSyncStatus("offline", "Offline", "Not syncing");
 }
 
@@ -1955,6 +2133,10 @@ async function submitOrder() {
 }
 
 async function updateOrderStatus(orderId, status) {
+  if (String(status).trim().toLowerCase() === "paid") {
+    showOrderToast("Payments require confirmed authoritative payment state.", "warning");
+    return;
+  }
   const order = state.orders.find((entry) => entry.id === orderId);
   if (!order) return;
   const previousStatus = order.status;
@@ -1981,36 +2163,112 @@ async function updateOrderStatus(orderId, status) {
 }
 
 async function markOrdersPaid(orders, method = "Card") {
-  if (!orders.length || orders.some((order) => order.status === "Paid")) return;
-  const previous = orders.map((order) => ({ order, status: order.status, closedAt: order.closedAt, payment: order.payment || null }));
-  const closedAt = new Date().toISOString();
-  orders.forEach((order) => {
-    order.status = "Paid";
-    order.closedAt = closedAt;
-    order.payment = { method, paidAt: closedAt };
-  });
-  saveState();
-  render();
+  if (!orders.length || paymentSubmissionInProgress) return;
+  if (!canRecordAuthoritativePayment()) {
+    showOrderToast("Payment permission is not available for your role.", "warning");
+    return;
+  }
+  const paymentContext = paymentFinancialContext;
+  if (!paymentContextIsCurrent(paymentContext) || orders.some((order) => order.paymentRestaurantId !== paymentContext.restaurantId)) {
+    showOrderToast("Payment restaurant context is unavailable. Reload the authorized order list.", "warning");
+    return;
+  }
+  const requestedCloudOrderIds = orders.map((order) => order.cloudId).filter(Boolean);
+  if (!requestedCloudOrderIds.length) {
+    showOrderToast("Payments require a live order.", "warning");
+    return;
+  }
+  const hydrated = await syncCloudOrders({ notify: false, paymentOrderIds: requestedCloudOrderIds });
+  if (!hydrated || !paymentContextIsCurrent(paymentContext)) {
+    showOrderToast("The authoritative payment state could not be refreshed. Retry with the same payment attempt.", "warning");
+    return;
+  }
+  orders = requestedCloudOrderIds.map((cloudId) => state.orders.find((order) => order.cloudId === cloudId)).filter(Boolean);
+  if (orders.length !== requestedCloudOrderIds.length) {
+    showOrderToast("The requested order is no longer available. Refresh the Front Desk list before recording payment.", "warning");
+    return;
+  }
+  if (orders.some((order) => order.status === "Paid")) {
+    showOrderToast("This order is already paid according to the authoritative ledger.", "warning");
+    return;
+  }
+  const reference = document.getElementById("paymentReference")?.value.trim() || "";
+  const note = document.getElementById("paymentNote")?.value.trim() || "";
+  if (method === "Other" && !note && orders.some((order) => !order.paymentAttempt)) {
+    showOrderToast("A payment note is required when the payment method is Other.", "warning");
+    return;
+  }
+  const cloudOrders = orders;
+  const payment = { method, reference, note };
+  paymentSubmissionInProgress = true;
+  paymentSubmissionGeneration++;
+  let confirmedCount = 0;
+  const failures = [];
+  const balanceConflictOrderIds = new Set();
 
   try {
-    await Promise.all(orders.filter((order) => order.cloudId).map((order) =>
-      window.TableOrderCloud.recordOrderPayment
-        ? window.TableOrderCloud.recordOrderPayment(order.cloudId, { method, total: orderTotal(order), paidAt: closedAt })
-        : window.TableOrderCloud.updateOrderStatus(order.cloudId, "Paid")
-    ));
-    lastCloudSyncAt = new Date();
-    setCloudSyncStatus("live", "Live", cloudSyncSummary());
-    syncCloudOrders({ notify: false });
-  } catch (error) {
-    previous.forEach(({ order, status, closedAt: oldClosedAt, payment }) => {
-      order.status = status;
-      order.closedAt = oldClosedAt;
-      order.payment = payment;
+    cloudOrders.forEach((order) => { order.paymentAttempt = createPaymentAttempt(order, payment); });
+    saveState();
+    render();
+    const results = await Promise.allSettled(cloudOrders.map((order) =>
+      window.TableOrderCloud.recordAuthoritativePayment(order.cloudId, order.paymentAttempt, paymentContext.restaurantId)));
+    if (!paymentContextIsCurrent(paymentContext)) return;
+    const paidAt = new Date().toISOString();
+    results.forEach((outcome, index) => {
+      if (outcome.status === "rejected") {
+        failures.push(outcome.reason);
+        if (outcome.reason?.code === "PAYMENT_EXCEEDS_REMAINING_BALANCE" || /PAYMENT_EXCEEDS_REMAINING_BALANCE/i.test(outcome.reason?.message || "")) {
+          balanceConflictOrderIds.add(cloudOrders[index].cloudId);
+        }
+        return;
+      }
+      const result = outcome.value;
+      if (result.paymentStatus !== "paid" && result.paymentStatus !== "partial") { failures.push(new Error("The authoritative payment result could not be confirmed.")); return; }
+      const original = cloudOrders[index];
+      const order = state.orders.find((entry) => entry.cloudId === original.cloudId) || original;
+      order.confirmedPayment = { ...result, idempotencyKey: original.paymentAttempt.idempotencyKey, method: original.paymentAttempt.method, confirmedAt: paidAt };
+      if (result.paymentStatus === "paid") {
+        order.status = "Paid";
+        order.closedAt = paidAt;
+      }
+      order.payment = { method: original.paymentAttempt.method, paidAt: result.paymentStatus === "paid" ? paidAt : null, id: result.paymentId, amountCents: result.amountCents };
+      delete order.paymentAttempt;
+      confirmedCount++;
     });
     saveState();
     render();
+    if (failures.length) throw failures[0];
+    lastCloudSyncAt = new Date();
+    setCloudSyncStatus("live", "Live", cloudSyncSummary());
+  } catch (error) {
+    if (!paymentContextIsCurrent(paymentContext)) return;
+    const exceedsRemainingBalance = balanceConflictOrderIds.size > 0
+      || error?.code === "PAYMENT_EXCEEDS_REMAINING_BALANCE"
+      || /PAYMENT_EXCEEDS_REMAINING_BALANCE/i.test(error?.message || "");
+    const reconciled = exceedsRemainingBalance
+      ? await syncCloudOrders({ notify: false, allowDuringPayment: true, paymentOrderIds: balanceConflictOrderIds })
+      : false;
+    if (reconciled) {
+      cloudOrders.filter((original) => balanceConflictOrderIds.has(original.cloudId)).forEach((original) => {
+        const order = state.orders.find((entry) => entry.cloudId === original.cloudId);
+        if (order?.paymentAttempt?.idempotencyKey === original.paymentAttempt?.idempotencyKey) delete order.paymentAttempt;
+      });
+    }
+    // Rendering/storage errors must not turn a confirmed operation into a retry.
+    try { saveState(); render(); } catch (uiError) { console.warn("Payment UI refresh failed:", uiError.message); }
     setCloudSyncStatus("offline", "Offline");
-    showOrderToast(`Payment status was not updated: ${error.message}`, "warning");
+    showOrderToast(exceedsRemainingBalance && reconciled
+      ? "Payment balance changed. The authoritative remaining balance has been refreshed; review it before recording payment."
+      : exceedsRemainingBalance
+      ? "Payment balance may have changed, but the authoritative state could not be refreshed. Retry with the same payment attempt."
+      : confirmedCount && !failures.length
+      ? `Payment was recorded, but the display could not refresh: ${error.message}. Do not submit it again.`
+      : `Payment was not confirmed for ${failures.length || "the pending"} order(s): ${error.message}. Retry will use the same payment attempt.`, "warning");
+  } finally {
+    if (paymentContextIsCurrent(paymentContext)) {
+      paymentSubmissionInProgress = false;
+      syncCloudOrders({ notify: false });
+    }
   }
 }
 
@@ -2088,6 +2346,9 @@ function renderFrontDesk() {
     button.addEventListener("click", () => {
       selectedFrontTableId = button.dataset.frontTable;
       renderFrontDesk();
+      // Render immediately for responsiveness, then replace any stale local
+      // payment projection with the complete ledger state for this table.
+      syncCloudOrders({ notify: false });
     });
   });
 
@@ -2104,6 +2365,17 @@ function renderInvoice() {
   const subtotal = orders.reduce((sum, order) => sum + orderSubtotal(order), 0);
   const tax = orders.reduce((sum, order) => sum + orderTax(order), 0);
   const total = orders.reduce((sum, order) => sum + orderTotal(order), 0);
+  const formContext = `${staffUser?.restaurantId || ""}:${table.id}`;
+  const paymentForm = panel.paymentFormContext === formContext ? {
+    method: document.getElementById("paymentMethod")?.value || "Card",
+    reference: document.getElementById("paymentReference")?.value || "",
+    note: document.getElementById("paymentNote")?.value || ""
+  } : { method: "Card", reference: "", note: "" };
+  panel.paymentFormContext = orders.length ? formContext : "";
+  const hasConfirmedPartial = orders.some((order) => order.confirmedPayment?.paymentStatus === "partial");
+  const remainingCents = hasConfirmedPartial
+    ? orders.reduce((sum, order) => sum + paymentAmountCents(order), 0)
+    : null;
 
   if (!orders.length) {
     panel.innerHTML = `
@@ -2143,13 +2415,19 @@ function renderInvoice() {
     <div class="line-row"><span>Subtotal ex. GST</span><strong>${money(subtotal)}</strong></div>
     <div class="line-row"><span>GST included</span><strong>${money(tax)}</strong></div>
     <div class="line-row"><span>Total</span><strong>${money(total)}</strong></div>
+    ${hasConfirmedPartial ? `<div class="line-row"><span>Remaining after confirmed payments</span><strong>${money(remainingCents / 100)}</strong></div>` : ""}
     <div class="invoice-actions">
       <select id="paymentMethod" aria-label="Payment method"><option>Card</option><option>Cash</option><option>EFTPOS</option><option>Other</option></select>
+      <input id="paymentReference" type="text" maxlength="80" placeholder="Reference (optional)" aria-label="Payment reference">
+      <input id="paymentNote" type="text" maxlength="200" placeholder="Note (required for Other)" aria-label="Payment note">
       <button class="primary-button" id="printInvoice">Print Invoice</button>
       <button class="ghost-button" id="markPaid">Record payment</button>
     </div>
   `;
 
+  document.getElementById("paymentMethod").value = paymentForm.method;
+  document.getElementById("paymentReference").value = paymentForm.reference;
+  document.getElementById("paymentNote").value = paymentForm.note;
   document.getElementById("printInvoice").addEventListener("click", () => printInvoice(table.id));
   document.getElementById("markPaid").addEventListener("click", () => markOrdersPaid(orders, document.getElementById("paymentMethod").value));
 }
@@ -3980,6 +4258,7 @@ async function continueOwnerSession() {
         ? await window.TableOrderCloud.getPlatformDashboardProfile(route.restaurantSlug)
         : await window.TableOrderCloud.getStaffProfile();
       staffUser = profile;
+      beginPaymentFinancialSession(profile);
       onboardingRestaurant = { id: profile.restaurantId, slug: profile.restaurantSlug, name: profile.restaurantName };
       setGatewayVisible(false);
       await loadCloudDataIntoApp({ silent: true });
@@ -3997,6 +4276,7 @@ async function continueOwnerSession() {
     }
     const profile = await window.TableOrderCloud.getStaffProfile();
     staffUser = profile;
+    beginPaymentFinancialSession(profile);
     onboardingRestaurant = { id: profile.restaurantId, slug: profile.restaurantSlug, name: profile.restaurantName };
     if (profile.restaurantStatus === "onboarding") {
       await loadCloudDataIntoApp({ silent: true });
