@@ -44,8 +44,8 @@ for (let index = from - 1; index < to; index++) {
   const test = cases[index];
   const allowed = ['owner','manager','cashier'].includes(test.name) && ['write','list'].includes(test.operation);
   const call = test.operation === 'write'
-    ? `perform public.record_authoritative_payment('${restaurant}','${orders[(test.round * 3 + ['owner','manager','cashier'].indexOf(test.name) + 6) % 6]}',1,'Cash','','','${randomUUID()}');`
-    : test.operation === 'list' ? `perform public.list_authoritative_payment_operations('${restaurant}',null);`
+    ? `perform public.record_authoritative_payment('${restaurant}'::uuid,'${orders[(test.round * 3 + ['owner','manager','cashier'].indexOf(test.name) + 6) % 6]}'::uuid,1,'Cash'::text,''::text,''::text,'${randomUUID()}'::uuid);`
+    : test.operation === 'list' ? `perform public.list_authoritative_payment_operations('${restaurant}'::uuid,null::uuid);`
       : test.operation === 'legacy-order' ? `perform public.record_restaurant_order_payment('${restaurant}','${orders[0]}','Cash');`
         : test.operation === 'legacy-detailed' ? `perform public.record_restaurant_payment('${restaurant}','${orders[0]}',1,'Cash');`
           : test.operation === 'legacy-void' ? `perform public.void_restaurant_payment('${restaurant}','${randomUUID()}','test');`
