@@ -494,6 +494,49 @@ function normalizePhotoUrl(value) {
   }
 }
 
+function sakeStreetMenuPhotoUrl(name) {
+  const key = String(name || "")
+    .toLowerCase()
+    .replace(/\(?\d+p\)?/g, "")
+    .replace(/sushi\s+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const file = {
+    "miso soup": "Miso soup.webp", kimchi: "Kimchi.webp", "kimchi chicken": "Kimchi chicken.webp", "seaweed salad": "Seaweed salad.webp",
+    "tofu & avocado salad": "Tofu & avocado salad.webp", "salmon salad": "Salmon salad.webp",
+    "kingfish carpaccio": "Kingfish carpaccio.webp", "salmon carpaccio": "Salmon carpaccio.webp",
+    "scallop carpaccio": "Scallop carpaccio.webp", "tuna tataki": "Tuna tataki.webp",
+    "agedashi tofu": "Agedashi tofu (8p).webp", "karaage chicken": "Karaage chicken.webp",
+    "katsu chicken": "Katsu chicken.webp", "spicy soft shell crab": "Spicy soft shell crab.webp",
+    "pork gyoza": "Pork gyoza (6p).webp", "popcorn prawn": "Popcorn prawn (5p).webp",
+    "miso eggplant": "Miso eggplant.webp", "salmon rice bowl": "Salmon rice bowl.webp",
+    "dynamite scallops": "Dynamite scallops (5p).webp", "tempura white fish": "Tempura White fish (6p).webp",
+    "tempura veggies": "Tempura Veggies - 5 types.webp", "seared salmon belly": "Seared salmon belly (6p).webp",
+    "seared king fish": "Seared King fish (6p).webp", "kingfish sashimi": "Kingfish sashimi (7p).webp",
+    "salmon ocean": "Salmon ocean (7p).webp", "tuna & salmon sashimi": "Tuna & salmon sashimi (7p).webp",
+    "mixed sashimi": "Mixed sashimi (16p).webp", "salmon diamond": "Salmon Diamond.webp", "salmon nigiri": "Salmon nigiri (4p).webp",
+    "kingfish nigiri": "Kingfish nigiri (4p).webp", "tuna nigiri": "Tuna nigiri (4p).webp",
+    "aburi salmon nigiri": "Aburi salmon nigiri (4p).webp", "aburi king fish": "Aburi King fish (4p).webp",
+    "aburi scallop nigiri": "Aburi scallop nigiri (4p).webp", "nigiri platter assorted": "Nigiri platter assorted (8p).webp",
+    "assorted sashimi & nigiri combo": "Nigiri & Sashimi combo (10p).webp", "cucumber maki": "Cucumber Maki.webp",
+    "avocado maki": "Avocado Maki.webp", "teriyaki chicken maki": "Teriyaki Chicken Maki.webp",
+    "salmon maki": "Salmon Maki.webp", "cooked tuna maki": "Cooked tuna Maki.webp",
+    "fresh tuna maki": "Fresh tuna Maki.webp", "egg (tamago) maki": "Egg (Tamago) Maki.webp",
+    "vegetarian roll": "Vegetarian Salad roll.webp", "cooked tuna roll": "Cooked tuna roll.webp",
+    "chicken schnitzel roll": "Chicken schnitzel roll.webp", "teriyaki chicken roll": "Teriyaki chicken roll.webp",
+    "fresh salmon deluxe roll": "Fresh salmon deluxe.webp", "seared salmon roll": "Seared salmon roll.webp",
+    "fried prawn roll": "Fried prawn roll.webp", "spicy soft shell crab roll": "Spicy soft shell crab roll.webp",
+    "fresh tuna roll": "Fresh tuna roll.webp", "spicy fresh tuna deluxe roll": "Spicy fresh tuna deluxe.webp",
+    "california roll": "California roll.webp", "vegetable ramen": "Vegetable ramen.webp",
+    "karaage chicken ramen": "Karaage chicken ramen.webp", "pork-belly ramen": "Pork-belly ramen.webp",
+    "seafood ramen": "Seafood ramen.webp", "stir fried vegetables": "Stir fried vegetables.webp",
+    "teriyaki chicken": "Teriyaki chicken with salad.webp", "teriyaki tasmanian salmon": "Teriyaki Tasmanian salmon with salad.webp",
+    "teriyaki king fish": "Teriyaki King fish with salad.webp", "aburi pork belly": "Aburi Pork Belly (4p).webp",
+    "pork bun": "Pork bun.webp"
+  }[key];
+  return file ? `/assets/sake-street/menu/${encodeURIComponent(file)}` : "";
+}
+
 function allMenuItems() {
   return state.menuItems || defaultMenuItems;
 }
@@ -1720,7 +1763,7 @@ function renderMenu() {
         .map((tag) => `<span class="tag ${tag === "Hot" ? "hot" : tag === "Chef" ? "soft" : ""}">${escapeHtml(tag)}</span>`)
         .join("");
       const optionLabel = item.optionTemplate && item.optionTemplate !== "none" ? `<span class="tag soft">${escapeHtml(optionTemplateLabel(item.optionTemplate))}</span>` : "";
-      const photoUrl = normalizePhotoUrl(item.photoData);
+      const photoUrl = normalizePhotoUrl(item.photoData || (profile.slug === "sake-street" ? sakeStreetMenuPhotoUrl(item.name) : ""));
       const photo = photoUrl
         ? `<div class="food-photo custom-photo" style="background-image: url('${escapeHtml(photoUrl)}')" role="img" aria-label="${escapeHtml(item.name)}"></div>`
         : `<div class="food-photo ${item.photo}" role="img" aria-label="${escapeHtml(item.name)}"></div>`;
@@ -3852,7 +3895,7 @@ async function loadCloudDataIntoApp(options = {}) {
       tags: Array.isArray(item.tags) ? item.tags : [],
       photo: `photo-${(index % 4) + 1}`,
       categoryId: item.category_id || null,
-      photoData: item.image_url || item.photo_url || "",
+      photoData: item.image_url || item.photo_url || (cloud.restaurant.slug === "sake-street" ? sakeStreetMenuPhotoUrl(item.name) : ""),
       optionTemplate: item.option_template || "none",
       optionConfig: Array.isArray(item.option_config) ? item.option_config : optionConfigForTemplate(item.option_template),
       soldOut: item.is_available === false || item.sold_out
