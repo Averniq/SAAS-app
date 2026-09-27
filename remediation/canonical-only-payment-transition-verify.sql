@@ -1,6 +1,6 @@
 -- REVIEW-ONLY / POST-COMMIT READ-ONLY VERIFICATION.
 -- Source manifest: canonical-only-payment-transition-candidate.sql SHA-256
--- 21f075e3aa1f61bd0f46f1e942915dd5d006dfaf04c96e26378d14f2895beaec
+-- 2fca63f5ffb980562a872ccaf63d07492b527dec2e1dd3e0801d3baa23c56707
 -- Run in a dedicated read-only session. This file contains no DDL or DML.
 begin read only;
 
@@ -27,10 +27,25 @@ with payment_manifest(payment_id,restaurant_id,order_id,amount_cents,payment_met
  ('ff0042d9-3a9d-4884-ba5d-ce3eb81df476'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'completed','paid','2026-07-30 13:28:19.118706+00'::timestamptz,'2026-07-30 13:28:19.118706+00'::timestamptz,'Card',2850,1,2850),
  ('cb16615e-a17a-4621-b55c-fcf217ec4b67'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'completed','paid','2026-07-30 23:21:59.562317+00'::timestamptz,'2026-07-30 23:21:59.562317+00'::timestamptz,'Card',3750,1,3750),
  ('e29ece3b-3b5a-4b63-8e6c-ed3ac763bdbd'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'completed','paid','2026-08-01 03:41:51.822193+00'::timestamptz,'2026-08-01 03:41:51.822193+00'::timestamptz,'Cash',8400,1,8400)
+), audit_manifest(audit_id,restaurant_id,order_id,payment_id,actor_role,action,entity_type,created_at,before_data_md5,after_data_md5) as (values
+ ('503dbaac-0d2b-4f77-89ca-3f1e448fe1a9'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'19d90015-bcae-48a3-acfb-2241d1adbbc0'::uuid,'4d964e9a-d45c-4917-8615-ccdd5240f460'::uuid,'owner','payment_added','payment','2026-07-30 10:11:25.22159+00'::timestamptz,'99914b932bd37a50b983c5e7c90ae93b','436aebc212a7b471cfb859da93ad2927'),
+ ('af640062-126f-4cc8-8533-db85012c3826'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'d2525eee-951e-4ee5-b17f-336f8fa5d079'::uuid,'84531173-eb91-454e-a323-b48880fc9d13'::uuid,'owner','payment_added','payment','2026-07-30 10:15:01.333297+00'::timestamptz,'99914b932bd37a50b983c5e7c90ae93b','8273d4a96bd966ebce455c44988208dd'),
+ ('857d2f7b-154a-4c2c-8418-8c40d026a72f'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'d2525eee-951e-4ee5-b17f-336f8fa5d079'::uuid,'e8bfda76-59d9-4a6b-b687-68f77533bca0'::uuid,'owner','payment_added','payment','2026-07-30 10:15:12.709661+00'::timestamptz,'99914b932bd37a50b983c5e7c90ae93b','87312d12f714ee32d358820375166696'),
+ ('2ac9af5d-37d3-4d96-8c3d-3f6b4b3e0c4e'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'d2525eee-951e-4ee5-b17f-336f8fa5d079'::uuid,'bb2a1297-ce17-462d-8a3f-9a6e0c0fd3e0'::uuid,'owner','payment_added','payment','2026-07-30 10:15:57.029617+00'::timestamptz,'99914b932bd37a50b983c5e7c90ae93b','ffca783771bd823853477c1584f29778'),
+ ('a6094ae2-c9a4-49f2-b3f2-236a32a18750'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'9238af74-f820-440d-8fc6-b36784343290'::uuid,'784dd6da-2581-490d-9fe4-f0e8a294cc81'::uuid,'owner','payment_added','payment','2026-07-30 12:25:26.844982+00'::timestamptz,'99914b932bd37a50b983c5e7c90ae93b','1f7b6ee69f885156f3dcccb552a7f2f4'),
+ ('db45f903-ef82-4888-b1c1-3c11ef4444c8'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'837b6fb4-33b9-4df2-aaf0-e28f2e590219'::uuid,'7ca06b1f-4b27-467d-96a9-1580517383f2'::uuid,'owner','payment_added','payment','2026-07-30 12:55:10.356242+00'::timestamptz,'99914b932bd37a50b983c5e7c90ae93b','914426cdb38e6dfe57df19accc8a0749'),
+ ('b13b661f-2c37-4fc8-860b-7d027b7766e1'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'ad3b16a6-57b6-48ff-b20d-c341bea57094'::uuid,'8719765b-9b68-45b3-8d88-1a68e86b3988'::uuid,'owner','payment_added','payment','2026-07-30 13:17:59.850863+00'::timestamptz,'99914b932bd37a50b983c5e7c90ae93b','70a1877d4db68f1c470b1f3e0a5046d9'),
+ ('8d3f5d3e-d812-4047-ba8f-1d4de00fa236'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'c7b7cd99-39af-4109-8b39-944e2a4cfb08'::uuid,'b1c58a21-d2a0-4cbf-8135-139ee8235468'::uuid,'owner','payment_added','payment','2026-07-30 13:19:09.730857+00'::timestamptz,'99914b932bd37a50b983c5e7c90ae93b','b7aedea52d8d1e12a4951017ea3437b6'),
+ ('fed926c9-77e4-49c8-bcaa-8fcb128b8488'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'ff0042d9-3a9d-4884-ba5d-ce3eb81df476'::uuid,'ce4497e4-ec91-4408-a6b8-13ac0ab4b39b'::uuid,'owner','payment_added','payment','2026-07-30 13:28:19.118706+00'::timestamptz,'99914b932bd37a50b983c5e7c90ae93b','dea3756cd3aaa6bf0aab53b611d72237'),
+ ('6a8bc5bd-d1fa-4624-a224-55dfe552b1f6'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'cb16615e-a17a-4621-b55c-fcf217ec4b67'::uuid,'bc6d7226-41bf-4f34-9eca-99d5560fed01'::uuid,'owner','payment_added','payment','2026-07-30 23:21:59.562317+00'::timestamptz,'99914b932bd37a50b983c5e7c90ae93b','325cb04b7398aaece6cd554015bb0cce'),
+ ('f45850c5-add5-434b-af38-b045a1f06ad0'::uuid,'246ebdf9-1ac2-4211-84ff-9b5163608374'::uuid,'e29ece3b-3b5a-4b63-8e6c-ed3ac763bdbd'::uuid,'fb67144a-a8be-4f3c-b4a8-86b077a59250'::uuid,'owner','payment_added','payment','2026-08-01 03:41:51.822193+00'::timestamptz,'99914b932bd37a50b983c5e7c90ae93b','42250bb759e65b14028a9e8d5bacb539')
 ), unrelated as (
   select count(*) as n,coalesce(sum(p.amount_cents),0) as cents,
     md5(coalesce(string_agg(to_jsonb(p)::text,'|' order by p.id),'')) as fingerprint
   from public.payments p left join payment_manifest m on m.payment_id=p.id where m.payment_id is null
+), unrelated_audit as (
+  select count(*) as n,md5(coalesce(string_agg(to_jsonb(a)::text,'|' order by a.id),'')) as fingerprint
+  from public.order_audit_log a left join audit_manifest m on m.audit_id=a.id where m.audit_id is null
 )
 select jsonb_build_object(
   'remaining_approved_payments',(select count(*) from public.payments p join payment_manifest m on m.payment_id=p.id),
@@ -40,6 +55,10 @@ select jsonb_build_object(
   'unrelated_payment_count',(select n from unrelated),
   'unrelated_payment_cents',(select cents from unrelated),
   'unrelated_payment_fingerprint',(select fingerprint from unrelated),
+  'approved_audit_rows_remaining',(select count(*) from public.order_audit_log a join audit_manifest m on m.audit_id=a.id),
+  'approved_audit_payment_references_remaining',(select count(*) from public.order_audit_log a join payment_manifest m on m.payment_id=a.payment_id),
+  'unrelated_audit_count',(select n from unrelated_audit),
+  'unrelated_audit_fingerprint',(select fingerprint from unrelated_audit),
   'payment_operations_exists',to_regclass('public.payment_operations') is not null,
   'payment_operations_count',(select count(*) from public.payment_operations),
   'payment_operations_rls',(select relrowsecurity from pg_class where oid='public.payment_operations'::regclass),

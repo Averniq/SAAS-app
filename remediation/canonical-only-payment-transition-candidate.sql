@@ -2,7 +2,7 @@
 begin isolation level serializable;
 -- Controlled payment freeze: prevents a concurrent payment/split/order mutation
 -- from escaping the manifest preflight before the explicit cleanup completes.
-lock table public.payments, public.orders, public.split_bills in share row exclusive mode;
+lock table public.payments, public.orders, public.split_bills, public.order_audit_log in share row exclusive mode;
 
 create temp table approved_payment_manifest(
   payment_id uuid primary key, restaurant_id uuid not null, order_id uuid not null,
@@ -23,6 +23,24 @@ insert into approved_payment_manifest values
  ('bc6d7226-41bf-4f34-9eca-99d5560fed01','246ebdf9-1ac2-4211-84ff-9b5163608374','cb16615e-a17a-4621-b55c-fcf217ec4b67',3750,'Card','completed','Table balance','9d2f82b1-f853-4eb9-bc35-e5bcd9e4acb7',null,'2026-07-30 23:21:59.562317+00'),
  ('fb67144a-a8be-4f3c-b4a8-86b077a59250','246ebdf9-1ac2-4211-84ff-9b5163608374','e29ece3b-3b5a-4b63-8e6c-ed3ac763bdbd',8400,'Cash','completed','Table balance','835d8cdb-23f5-40e5-a6b6-bd1ffcfdec18',null,'2026-08-01 03:41:51.822193+00');
 
+create temp table approved_payment_audit_manifest(
+ audit_id uuid primary key,restaurant_id uuid not null,order_id uuid not null,payment_id uuid not null unique,
+ actor_role text not null,action text not null,entity_type text not null,created_at timestamptz not null,
+ before_data_md5 text not null,after_data_md5 text not null
+) on commit drop;
+insert into approved_payment_audit_manifest values
+ ('503dbaac-0d2b-4f77-89ca-3f1e448fe1a9','246ebdf9-1ac2-4211-84ff-9b5163608374','19d90015-bcae-48a3-acfb-2241d1adbbc0','4d964e9a-d45c-4917-8615-ccdd5240f460','owner','payment_added','payment','2026-07-30 10:11:25.22159+00','99914b932bd37a50b983c5e7c90ae93b','436aebc212a7b471cfb859da93ad2927'),
+ ('af640062-126f-4cc8-8533-db85012c3826','246ebdf9-1ac2-4211-84ff-9b5163608374','d2525eee-951e-4ee5-b17f-336f8fa5d079','84531173-eb91-454e-a323-b48880fc9d13','owner','payment_added','payment','2026-07-30 10:15:01.333297+00','99914b932bd37a50b983c5e7c90ae93b','8273d4a96bd966ebce455c44988208dd'),
+ ('857d2f7b-154a-4c2c-8418-8c40d026a72f','246ebdf9-1ac2-4211-84ff-9b5163608374','d2525eee-951e-4ee5-b17f-336f8fa5d079','e8bfda76-59d9-4a6b-b687-68f77533bca0','owner','payment_added','payment','2026-07-30 10:15:12.709661+00','99914b932bd37a50b983c5e7c90ae93b','87312d12f714ee32d358820375166696'),
+ ('2ac9af5d-37d3-4d96-8c3d-3f6b4b3e0c4e','246ebdf9-1ac2-4211-84ff-9b5163608374','d2525eee-951e-4ee5-b17f-336f8fa5d079','bb2a1297-ce17-462d-8a3f-9a6e0c0fd3e0','owner','payment_added','payment','2026-07-30 10:15:57.029617+00','99914b932bd37a50b983c5e7c90ae93b','ffca783771bd823853477c1584f29778'),
+ ('a6094ae2-c9a4-49f2-b3f2-236a32a18750','246ebdf9-1ac2-4211-84ff-9b5163608374','9238af74-f820-440d-8fc6-b36784343290','784dd6da-2581-490d-9fe4-f0e8a294cc81','owner','payment_added','payment','2026-07-30 12:25:26.844982+00','99914b932bd37a50b983c5e7c90ae93b','1f7b6ee69f885156f3dcccb552a7f2f4'),
+ ('db45f903-ef82-4888-b1c1-3c11ef4444c8','246ebdf9-1ac2-4211-84ff-9b5163608374','837b6fb4-33b9-4df2-aaf0-e28f2e590219','7ca06b1f-4b27-467d-96a9-1580517383f2','owner','payment_added','payment','2026-07-30 12:55:10.356242+00','99914b932bd37a50b983c5e7c90ae93b','914426cdb38e6dfe57df19accc8a0749'),
+ ('b13b661f-2c37-4fc8-860b-7d027b7766e1','246ebdf9-1ac2-4211-84ff-9b5163608374','ad3b16a6-57b6-48ff-b20d-c341bea57094','8719765b-9b68-45b3-8d88-1a68e86b3988','owner','payment_added','payment','2026-07-30 13:17:59.850863+00','99914b932bd37a50b983c5e7c90ae93b','70a1877d4db68f1c470b1f3e0a5046d9'),
+ ('8d3f5d3e-d812-4047-ba8f-1d4de00fa236','246ebdf9-1ac2-4211-84ff-9b5163608374','c7b7cd99-39af-4109-8b39-944e2a4cfb08','b1c58a21-d2a0-4cbf-8135-139ee8235468','owner','payment_added','payment','2026-07-30 13:19:09.730857+00','99914b932bd37a50b983c5e7c90ae93b','b7aedea52d8d1e12a4951017ea3437b6'),
+ ('fed926c9-77e4-49c8-bcaa-8fcb128b8488','246ebdf9-1ac2-4211-84ff-9b5163608374','ff0042d9-3a9d-4884-ba5d-ce3eb81df476','ce4497e4-ec91-4408-a6b8-13ac0ab4b39b','owner','payment_added','payment','2026-07-30 13:28:19.118706+00','99914b932bd37a50b983c5e7c90ae93b','dea3756cd3aaa6bf0aab53b611d72237'),
+ ('6a8bc5bd-d1fa-4624-a224-55dfe552b1f6','246ebdf9-1ac2-4211-84ff-9b5163608374','cb16615e-a17a-4621-b55c-fcf217ec4b67','bc6d7226-41bf-4f34-9eca-99d5560fed01','owner','payment_added','payment','2026-07-30 23:21:59.562317+00','99914b932bd37a50b983c5e7c90ae93b','325cb04b7398aaece6cd554015bb0cce'),
+ ('f45850c5-add5-434b-af38-b045a1f06ad0','246ebdf9-1ac2-4211-84ff-9b5163608374','e29ece3b-3b5a-4b63-8e6c-ed3ac763bdbd','fb67144a-a8be-4f3c-b4a8-86b077a59250','owner','payment_added','payment','2026-08-01 03:41:51.822193+00','99914b932bd37a50b983c5e7c90ae93b','42250bb759e65b14028a9e8d5bacb539');
+
 create temp table approved_order_manifest(order_id uuid primary key,restaurant_id uuid,status text,payment_status text,paid_at timestamptz,closed_at timestamptz,payment_method text,total_cents integer,payment_count integer,payment_cents integer) on commit drop;
 insert into approved_order_manifest values
  ('19d90015-bcae-48a3-acfb-2241d1adbbc0','246ebdf9-1ac2-4211-84ff-9b5163608374','completed','paid','2026-07-30 10:11:25.22159+00','2026-07-30 10:11:25.22159+00','Card',2550,1,2550),
@@ -36,20 +54,35 @@ insert into approved_order_manifest values
  ('e29ece3b-3b5a-4b63-8e6c-ed3ac763bdbd','246ebdf9-1ac2-4211-84ff-9b5163608374','completed','paid','2026-08-01 03:41:51.822193+00','2026-08-01 03:41:51.822193+00','Cash',8400,1,8400);
 
 do $$ declare n integer; begin
- if (select count(*) from approved_payment_manifest)<>11 or (select count(*) from approved_order_manifest)<>9 then raise exception 'MANIFEST_COUNT_DRIFT'; end if;
+ if (select count(*) from approved_payment_manifest)<>11 or (select count(*) from approved_order_manifest)<>9 or (select count(*) from approved_payment_audit_manifest)<>11 then raise exception 'MANIFEST_COUNT_DRIFT'; end if;
  if to_regclass('public.payment_operations') is not null then raise exception 'CANONICAL_LEDGER_ALREADY_EXISTS'; end if;
  if to_regprocedure('public.record_restaurant_order_payment(uuid,uuid,text)') is null or to_regprocedure('public.record_restaurant_payment(uuid,uuid,integer,text,text,uuid,uuid,integer,integer,text)') is null or to_regprocedure('public.void_restaurant_payment(uuid,uuid,text)') is null then raise exception 'LEGACY_PAYMENT_SURFACE_DRIFT'; end if;
- select count(*) into n from public.payments p join approved_payment_manifest m on m.payment_id=p.id where p.restaurant_id=m.restaurant_id and p.order_id=m.order_id and p.amount_cents=m.amount_cents and p.status=m.status and p.payment_method=m.payment_method and p.split_bill_id is null and p.idempotency_key=m.idempotency_key and p.note is not distinct from m.note and p.payment_reference is not distinct from m.payment_reference and p.paid_at=m.paid_at;
+ -- These approved rows are disposable build-up data. Guard deletion scope, rather
+ -- than mutable metadata: exact ID, restaurant/order mapping, and no split only.
+ select count(*) into n from public.payments p join approved_payment_manifest m on m.payment_id=p.id where p.restaurant_id=m.restaurant_id and p.order_id=m.order_id and p.split_bill_id is null;
  if n<>11 then raise exception 'MANIFEST_PAYMENT_DRIFT'; end if;
  if exists(select 1 from public.payments p join approved_order_manifest m on m.order_id=p.order_id where p.id not in(select payment_id from approved_payment_manifest)) then raise exception 'UNAPPROVED_PAYMENT_DRIFT'; end if;
+ if (select count(*) from public.payments p where p.id not in(select payment_id from approved_payment_manifest))<>0 or (select md5(coalesce(string_agg(to_jsonb(p)::text,'|' order by p.id),'')) from public.payments p where p.id not in(select payment_id from approved_payment_manifest))<>'d41d8cd98f00b204e9800998ecf8427e' then raise exception 'MANIFEST_UNRELATED_PAYMENT_DRIFT'; end if;
  select count(*) into n from public.orders o join approved_order_manifest m on m.order_id=o.id;
  if n<>9 then raise exception 'MANIFEST_ORDER_DRIFT'; end if;
  if exists(select 1 from public.orders o join approved_order_manifest m on m.order_id=o.id where o.restaurant_id is distinct from m.restaurant_id or o.status is distinct from m.status or o.payment_status is distinct from m.payment_status or o.paid_at is distinct from m.paid_at or o.closed_at is distinct from m.closed_at or o.payment_method is distinct from m.payment_method or round(o.total*100)::integer is distinct from m.total_cents) then raise exception 'MANIFEST_ORDER_DRIFT'; end if;
- if exists(select 1 from approved_order_manifest m join public.payments p on p.order_id=m.order_id and p.status='completed' group by m.order_id,m.payment_count,m.payment_cents having count(*)<>m.payment_count or sum(p.amount_cents)<>m.payment_cents) then raise exception 'MANIFEST_ORDER_TOTAL_DRIFT'; end if;
+ if exists(select 1 from approved_order_manifest m left join public.payments p on p.order_id=m.order_id and p.id in(select payment_id from approved_payment_manifest) group by m.order_id,m.payment_count having count(p.id)<>m.payment_count) then raise exception 'MANIFEST_ORDER_TOTAL_DRIFT'; end if;
  if exists(select 1 from public.split_bills s join approved_order_manifest m on m.order_id=s.order_id) then raise exception 'MANIFEST_SPLIT_DRIFT'; end if;
+ -- Audit metadata is not eligibility state for this approved disposable dataset.
+ -- Preserve the identity, payment/order/restaurant relationship, and event kind.
+ select count(*) into n from public.order_audit_log a join approved_payment_audit_manifest m on m.audit_id=a.id where a.restaurant_id=m.restaurant_id and a.order_id=m.order_id and a.payment_id=m.payment_id and a.action=m.action and a.entity_type=m.entity_type;
+ if n<>11 then raise exception 'MANIFEST_AUDIT_DRIFT'; end if;
+ if exists(select 1 from approved_payment_manifest p left join approved_payment_audit_manifest a on a.payment_id=p.payment_id group by p.payment_id having count(a.audit_id)<>1) then raise exception 'MANIFEST_AUDIT_MAPPING_DRIFT'; end if;
+ if exists(select 1 from public.order_audit_log a join approved_payment_manifest p on p.payment_id=a.payment_id where a.id not in(select audit_id from approved_payment_audit_manifest)) then raise exception 'MANIFEST_AUDIT_EXTRA'; end if;
+ if (select count(*) from public.order_audit_log a where a.id not in(select audit_id from approved_payment_audit_manifest))<>17 or coalesce((select md5(string_agg(to_jsonb(a)::text,'|' order by a.id)) from public.order_audit_log a where a.id not in(select audit_id from approved_payment_audit_manifest)),'')<>'9a3422b54cefc8a5e3c6b50ead07bd95' then raise exception 'MANIFEST_UNRELATED_AUDIT_DRIFT'; end if;
 end $$;
 
-delete from public.payments where id in(select payment_id from approved_payment_manifest);
+do $$ declare n integer; begin
+ delete from public.order_audit_log a using approved_payment_audit_manifest m where a.id=m.audit_id and a.restaurant_id=m.restaurant_id and a.order_id=m.order_id and a.payment_id=m.payment_id and a.action=m.action and a.entity_type=m.entity_type;
+ get diagnostics n = row_count; if n<>11 then raise exception 'MANIFEST_AUDIT_DELETE_DRIFT'; end if;
+ delete from public.payments where id in(select payment_id from approved_payment_manifest);
+ get diagnostics n = row_count; if n<>11 then raise exception 'MANIFEST_PAYMENT_DELETE_DRIFT'; end if;
+end $$;
 update public.orders o set payment_status='unpaid',paid_at=null,payment_method=null,closed_at=null where o.id in(select order_id from approved_order_manifest) and o.closed_at=(select m.closed_at from approved_order_manifest m where m.order_id=o.id);
 
 create table public.payment_operations(id uuid primary key default gen_random_uuid(),restaurant_id uuid not null references public.restaurants(id) on delete restrict,order_id uuid not null references public.orders(id) on delete restrict,amount_cents integer not null check(amount_cents>0),payment_method text not null check(payment_method in ('Cash','Card','EFTPOS','Other')),payment_reference text not null default '' check(length(payment_reference)<=80),note text not null default '' check(length(note)<=200),idempotency_key uuid not null,payload_fingerprint text not null check(payload_fingerprint~'^[a-f0-9]{64}$'),recorded_by uuid not null references auth.users(id) on delete restrict,recorded_at timestamptz not null default now(),created_at timestamptz not null default now(),result_snapshot jsonb not null,unique(restaurant_id,idempotency_key));
@@ -92,6 +125,9 @@ do $$ begin
  if has_function_privilege('public','public.list_authoritative_payment_operations(uuid,uuid)','execute') or has_function_privilege('anon','public.list_authoritative_payment_operations(uuid,uuid)','execute') or not has_function_privilege('authenticated','public.list_authoritative_payment_operations(uuid,uuid)','execute') then raise exception 'CANONICAL_LIST_ACL_DRIFT'; end if;
  if has_function_privilege('authenticated','public.record_restaurant_order_payment(uuid,uuid,text)','execute') or has_function_privilege('authenticated','public.record_restaurant_payment(uuid,uuid,integer,text,text,uuid,uuid,integer,integer,text)','execute') or has_function_privilege('authenticated','public.void_restaurant_payment(uuid,uuid,text)','execute') then raise exception 'LEGACY_PAYMENT_ACL_DRIFT'; end if;
  if exists(select 1 from public.payments p join approved_payment_manifest m on m.payment_id=p.id) then raise exception 'MANIFEST_DELETE_INCOMPLETE'; end if;
+ if (select count(*) from public.payments)<>0 or (select md5(coalesce(string_agg(to_jsonb(p)::text,'|' order by p.id),'')) from public.payments p)<>'d41d8cd98f00b204e9800998ecf8427e' then raise exception 'UNRELATED_PAYMENT_PRESERVATION_DRIFT'; end if;
+ if exists(select 1 from public.order_audit_log a join approved_payment_audit_manifest m on m.audit_id=a.id) then raise exception 'MANIFEST_AUDIT_DELETE_INCOMPLETE'; end if;
+ if (select count(*) from public.order_audit_log)<>17 or coalesce((select md5(string_agg(to_jsonb(a)::text,'|' order by a.id)) from public.order_audit_log a),'')<>'9a3422b54cefc8a5e3c6b50ead07bd95' then raise exception 'UNRELATED_AUDIT_PRESERVATION_DRIFT'; end if;
  if (select count(*) from public.orders o join approved_order_manifest m on m.order_id=o.id where o.payment_status='unpaid' and o.paid_at is null and o.closed_at is null and o.payment_method is null)=9 then null; else raise exception 'ORDER_CLEANUP_ROWCOUNT_DRIFT'; end if;
  if (select count(*) from public.orders o join approved_order_manifest m on m.order_id=o.id where o.status is distinct from m.status or o.payment_status is distinct from 'unpaid' or o.paid_at is not null or o.closed_at is not null or o.payment_method is not null)<>0 then raise exception 'ORDER_CLEANUP_INCOMPLETE'; end if;
 end $$;

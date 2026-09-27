@@ -4,7 +4,7 @@ This runbook applies only to the exact committed transition candidate:
 
 ```text
 remediation/canonical-only-payment-transition-candidate.sql
-SHA-256: 21f075e3aa1f61bd0f46f1e942915dd5d006dfaf04c96e26378d14f2895beaec
+SHA-256: 2fca63f5ffb980562a872ccaf63d07492b527dec2e1dd3e0801d3baa23c56707
 ```
 
 It does not authorize Production access, execution, deployment, or payment activity.
@@ -61,10 +61,23 @@ Required results:
 - `expected_payments=11`, `matched_payments=11`.
 - `expected_orders=9`, `matched_orders=9`.
 - All drift counters are zero, including linked splits and unapproved payments on manifest orders.
+- `expected_approved_audits=11`, `matched_approved_audits=11`,
+  `audit_payment_mapping_drift=0`, and `extra_audits_for_approved_payments=0`.
+- Record `unrelated_audit_count=17` and
+  `unrelated_audit_fingerprint=9a3422b54cefc8a5e3c6b50ead07bd95` for post-commit comparison.
 - Canonical ledger/writer/list are absent; all three legacy signatures are present.
 - Record the unrelated payment count, cents, and fingerprint for post-commit comparison.
 
 Abort before mutation if any required result differs. The transition itself repeats the core checks under `SERIALIZABLE` isolation and locks.
+
+The approved rows are explicitly disposable build-up/test data. Payment eligibility is
+therefore bound to the exact payment IDs, restaurant/order mapping, NULL split
+association, and the absence of any unapproved payment on the nine approved orders;
+audit eligibility is bound to exact audit IDs, audit-to-payment and
+restaurant/order mappings, and `payment_added`/`payment`. Mutable operational metadata
+(for example amount, status, timestamps, actor name/role, notes, references, and JSON
+payload content) is deliberately not an eligibility gate. The unrelated payment and
+audit baselines remain exact preservation gates.
 
 ## FREEZE
 
@@ -84,7 +97,11 @@ psql "$env:PRODUCTION_DATABASE_URL" --set ON_ERROR_STOP=1 --file remediation/can
 
 Expected result: exit code `0`, `COMMIT`, then the candidate's `NOTIFY pgrst, 'reload schema'`.
 
-The one transaction validates the manifest, deletes only the 11 explicit payment IDs, cleans only the nine payment projections while preserving `orders.status`, installs the canonical ledger/RPCs, and revokes the three legacy RPCs.
+The one transaction validates the payment, order, and audit manifests; deletes only the
+11 explicit `order_audit_log` IDs; then deletes only the 11 explicit payment IDs. It
+does not null audit payment references, alter the audit FK, disable constraints, or use
+CASCADE. It then cleans only the nine payment projections while preserving
+`orders.status`, installs the canonical ledger/RPCs, and revokes the three legacy RPCs.
 
 Any error before `COMMIT` aborts the entire transaction. Keep the freeze active and investigate; do not retry blindly.
 
@@ -99,8 +116,12 @@ psql "$env:PRODUCTION_DATABASE_URL" --set ON_ERROR_STOP=1 --file remediation/can
 Required results:
 
 - `remaining_approved_payments=0`.
+- `approved_audit_rows_remaining=0` and
+  `approved_audit_payment_references_remaining=0`.
 - `cleaned_order_projections=9`; `status_drift=0`; `linked_splits=0`.
 - Unrelated payment count, cents, and fingerprint match preflight.
+- `unrelated_audit_count=17` and
+  `unrelated_audit_fingerprint=9a3422b54cefc8a5e3c6b50ead07bd95`.
 - `payment_operations_exists=true`, `payment_operations_count=0`, and RLS is enabled.
 - Canonical writer/list: PUBLIC and anon `false`, authenticated `true`.
 - All three legacy RPCs: PUBLIC, anon, and authenticated `false`.
