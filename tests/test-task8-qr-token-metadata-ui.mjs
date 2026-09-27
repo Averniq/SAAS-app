@@ -12,10 +12,26 @@ assert.match(migration, /has_active_token/,
   "metadata must distinguish a live QR/link from no live token");
 assert.doesNotMatch(migration, /jsonb_build_object\([^)]*token_hash/s,
   "metadata response must not expose token hashes");
-assert.match(client, /getPublicQrTableTokenMetadata\(profile\.restaurantId\)/,
-  "dashboard data loading must request safe token metadata");
+assert.match(client, /loadOptionalPublicQrTableTokenMetadata\(profile\.restaurantId\)/,
+  "dashboard data loading must isolate safe token metadata from the required catalogue");
+assert.match(client, /PGRST202[\s\S]*?RESTAURANT_ACCESS_DENIED/,
+  "missing metadata RPCs and denied metadata access must be expected optional states");
+assert.match(client, /publicQrTokenMetadataAvailability/,
+  "dashboard loading must expose metadata availability separately from catalogue data");
 assert.match(app, /hasActivePublicQrToken/,
   "safe token-existence state must be carried to table cards");
+assert.match(app, /function canManagePublicQrTokens\(\)[\s\S]*?\["owner", "manager"\]/,
+  "only owners and managers may administer QR tokens in the browser");
+assert.match(app, /if \(!canManagePublicQrTokens\(\)\) throw new Error\("QR token management is unavailable/,
+  "QR issuance must fail closed when safe metadata is unavailable or the role is not permitted");
+assert.match(app, /publicQrTokenMetadataAvailability/,
+  "the app must retain QR metadata availability separately from the catalogue");
+assert.match(app, /function clearIssuedQrSessionState\(\)\s*\{\s*issuedQrUrls\.clear\(\);[\s\S]*?publicQrTokenMetadataAvailability = "unavailable";/,
+  "plaintext QR URLs and metadata availability must be cleared on a session boundary");
+assert.match(app, /async function handleStaffLogout\(\)\s*\{[\s\S]*?clearIssuedQrSessionState\(\);/,
+  "staff logout must clear owner-issued in-memory QR URLs");
+assert.match(app, /async function handlePlatformLogout\(\)\s*\{[\s\S]*?clearIssuedQrSessionState\(\);/,
+  "platform logout must clear any in-memory QR URLs");
 assert.match(app, /Regenerate \/ Rotate QR/,
   "existing nonrecoverable tokens must be labelled as rotation");
 assert.match(app, /previous customer QR\/link will stop working/,

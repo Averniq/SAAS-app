@@ -325,6 +325,7 @@ let kitchenAudioContext = null;
 let optionItemId = "";
 let importPreviewItems = [];
 let staffUser = null;
+let publicQrTokenMetadataAvailability = "unavailable";
 let pendingStaffView = "";
 let cloudSyncTimer = null;
 let cloudSyncBusy = false;
@@ -913,6 +914,11 @@ function tableIdFromUrl() {
 
 const issuedQrUrls = new Map();
 
+function clearIssuedQrSessionState() {
+  issuedQrUrls.clear();
+  publicQrTokenMetadataAvailability = "unavailable";
+}
+
 function orderingTokenUrl(token) {
   const url = new URL(window.location.href);
   url.pathname = `/order/${encodeURIComponent(token)}`;
@@ -927,7 +933,16 @@ function hasUnrecoverablePublicQrToken(table) {
   return Boolean(table?.hasActivePublicQrToken && !issuedQrUrl(table));
 }
 
+function canManagePublicQrTokens() {
+  return publicQrTokenMetadataAvailability === "available" && ["owner", "manager"].includes(staffUser?.role);
+}
+
 function qrCardStatus(table) {
+  if (!canManagePublicQrTokens()) {
+    return ["owner", "manager"].includes(staffUser?.role)
+      ? "QR token status is unavailable. Restore QR metadata before generating or rotating links."
+      : "QR administration is available to owners and managers only.";
+  }
   if (issuedQrUrl(table)) return "QR ready for this session.";
   if (hasUnrecoverablePublicQrToken(table)) return "An active QR/link exists, but its plaintext is not recoverable after reload.";
   return "Generate a customer QR when you are ready.";
@@ -938,6 +953,7 @@ function qrCardActionLabel(table) {
 }
 
 async function issueQrForTable(table, { rotate = false } = {}) {
+  if (!canManagePublicQrTokens()) throw new Error("QR token management is unavailable for this role or while QR metadata is unavailable.");
   if (!table?.cloudId || !staffUser?.restaurantId || !window.TableOrderCloud?.issuePublicQrTableToken) throw new Error("A cloud-connected owner or manager session is required to generate a QR code.");
   if (rotate && !window.confirm("Regenerate this QR? The previous customer QR/link will stop working.")) return "";
   const result = await window.TableOrderCloud.issuePublicQrTableToken(staffUser.restaurantId, table.cloudId, null);
@@ -1559,6 +1575,7 @@ async function handleStaffLogin(event) {
   submit.disabled = true;
   submit.textContent = "Logging in...";
   setStaffAuthError("");
+  clearIssuedQrSessionState();
 
   try {
     await window.TableOrderCloud.signInWithPassword(username, password);
@@ -1584,6 +1601,7 @@ async function handleStaffLogin(event) {
 
 async function handleStaffLogout() {
   stopCloudOrderSync();
+  clearIssuedQrSessionState();
   await window.TableOrderCloud.signOut().catch(() => {});
   staffUser = null;
   pendingStaffView = "";
@@ -2723,7 +2741,7 @@ function renderSetup() {
           <p class="muted">${qrCardStatus(table)}</p>
           ${hasUnrecoverablePublicQrToken(table) ? `<p class="muted">Regenerating will stop the previous QR/link from working.</p>` : ""}
           <div class="qr-actions">
-            <button class="ghost-button" data-generate-qr-table="${table.id}">${qrCardActionLabel(table)}</button>
+            <button class="ghost-button" data-generate-qr-table="${table.id}" ${canManagePublicQrTokens() ? "" : "disabled"}>${qrCardActionLabel(table)}</button>
             <button class="ghost-button" data-copy-qr-table="${table.id}" ${issuedQrUrl(table) ? "" : "disabled"}>Copy Link</button>
             <button class="ghost-button" data-download-qr="${table.id}">PNG</button>
           </div>
@@ -2871,7 +2889,7 @@ function renderTableAdmin() {
           </div>
           <span class="status-buttons">
             <button class="ghost-button" data-copy-table="${table.id}">Copy</button>
-            <button class="ghost-button" data-reset-token="${table.id}">${qrCardActionLabel(table)}</button>
+            <button class="ghost-button" data-reset-token="${table.id}" ${canManagePublicQrTokens() ? "" : "disabled"}>${qrCardActionLabel(table)}</button>
             <button class="ghost-button" data-delete-table="${table.id}" ${hasOpenOrders || allTables().length === 1 ? "disabled" : ""}>Delete</button>
           </span>
         </div>
@@ -3799,6 +3817,7 @@ async function loadCloudDataIntoApp(options = {}) {
     };
 
     const publicQrTokenMetadataByTableId = new Map((cloud.publicQrTokenMetadata || []).map((metadata) => [metadata.table_id, metadata]));
+    publicQrTokenMetadataAvailability = cloud.publicQrTokenMetadataAvailability || "unavailable";
     state.tables = cloud.tables.map((table) => ({
       id: table.local_id || table.id,
       cloudId: table.id,
@@ -4203,6 +4222,7 @@ async function handleInviteAuth(event) {
   const password = document.getElementById("invitePassword").value;
   button.disabled = true;
   setInviteAuthError("");
+  clearIssuedQrSessionState();
   try {
     if (inviteAuthMode === "login") {
       await window.TableOrderCloud.signInWithPassword(email, password);
@@ -4249,6 +4269,7 @@ async function handleOwnerAuth(event) {
 
 async function continueOwnerSession() {
   try {
+    clearIssuedQrSessionState();
     const route = window.TableOrderCloud?.routeContext?.() || APP_ROUTE;
     const restaurantArea = ["dashboard", "kitchen", "frontdesk", "reports", "setup"].includes(route.area);
 
@@ -4376,6 +4397,7 @@ async function createPlatformRestaurant(event) {
 }
 
 async function handlePlatformLogout() {
+  clearIssuedQrSessionState();
   await window.TableOrderCloud.signOut().catch(() => {});
   platformUser = null;
   platformRestaurants = [];

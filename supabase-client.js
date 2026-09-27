@@ -278,6 +278,21 @@
     if (!session) throw new Error("Staff login is required.");
     return request("rpc/get_public_qr_table_token_metadata", { method: "POST", accessToken: session.access_token, body: JSON.stringify({ p_restaurant_id: restaurantId }) });
   }
+  function isExpectedPublicQrMetadataUnavailable(error) {
+    const message = String(error?.message || "");
+    return error?.code === "PGRST202"
+      || error?.code === "RESTAURANT_ACCESS_DENIED"
+      || (error?.status === 404 && /get_public_qr_table_token_metadata|schema cache|could not find the function/i.test(message))
+      || /RESTAURANT_ACCESS_DENIED/i.test(message);
+  }
+  async function loadOptionalPublicQrTableTokenMetadata(restaurantId) {
+    try {
+      return { metadata: await getPublicQrTableTokenMetadata(restaurantId), availability: "available" };
+    } catch (error) {
+      if (!isExpectedPublicQrMetadataUnavailable(error)) console.warn("QR token metadata could not be loaded; the authenticated catalogue remains available.", error);
+      return { metadata: [], availability: isExpectedPublicQrMetadataUnavailable(error) ? "unavailable" : "error" };
+    }
+  }
   function getPublicQrOrderContext(token) { return request("rpc/get_public_qr_order_context", { method: "POST", body: JSON.stringify({ p_token: token }) }); }
   function submitPublicQrOrder(token, items, note, customerName, idempotencyKey) { return request("rpc/submit_public_qr_order", { method: "POST", body: JSON.stringify({ p_token: token, p_items: items, p_note: note || "", p_customer_name: customerName || "", p_idempotency_key: idempotencyKey }) }); }
   function getPublicQrOrderStatus(token, orderId) { return request("rpc/get_public_qr_order_status", { method: "POST", body: JSON.stringify({ p_token: token, p_order_id: orderId }) }); }
@@ -299,13 +314,18 @@
     const profile = activePlatformDashboard?.userId === session?.user?.id && activePlatformDashboard?.restaurantSlug === context.restaurantSlug
       ? { id: session?.user?.id, email: session?.user?.email || "Master", ...activePlatformDashboard, role: "platform_admin" }
       : await getStaffProfile();
-    const [restaurant, tables, menuItems, publicQrTokenMetadata] = await Promise.all([
-      request(`restaurants?select=*&id=eq.${encodeURIComponent(profile.restaurantId)}&limit=1`, { accessToken: session.access_token }),
-      request(`tables?select=*&restaurant_id=eq.${encodeURIComponent(profile.restaurantId)}&order=sort_order.asc`, { accessToken: session.access_token }),
-      request(`menu_items?select=*&restaurant_id=eq.${encodeURIComponent(profile.restaurantId)}&is_active=eq.true&is_available=eq.true&sold_out=eq.false&order=sort_order.asc`, { accessToken: session.access_token }),
-      getPublicQrTableTokenMetadata(profile.restaurantId)
+    const [[restaurant, tables, menuItems], qrMetadata] = await Promise.all([
+      Promise.all([
+        request(`restaurants?select=*&id=eq.${encodeURIComponent(profile.restaurantId)}&limit=1`, { accessToken: session.access_token }),
+        request(`tables?select=*&restaurant_id=eq.${encodeURIComponent(profile.restaurantId)}&order=sort_order.asc`, { accessToken: session.access_token }),
+        request(`menu_items?select=*&restaurant_id=eq.${encodeURIComponent(profile.restaurantId)}&is_active=eq.true&is_available=eq.true&sold_out=eq.false&order=sort_order.asc`, { accessToken: session.access_token })
+      ]),
+      loadOptionalPublicQrTableTokenMetadata(profile.restaurantId)
     ]);
-    return { restaurant: restaurant?.[0], tables: tables || [], menuItems: menuItems || [], publicQrTokenMetadata: publicQrTokenMetadata || [] };
+    return {
+      restaurant: restaurant?.[0], tables: tables || [], menuItems: menuItems || [],
+      publicQrTokenMetadata: qrMetadata.metadata || [], publicQrTokenMetadataAvailability: qrMetadata.availability
+    };
   }
 
   async function createRestaurant(profile) {
