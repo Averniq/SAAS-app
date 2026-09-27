@@ -34,6 +34,7 @@ function page(storage = new Map(), restaurantId = 'tenant-a') {
     ${section('function paymentAmountCents(', 'function tableTokenFromUrl(')}
     ${section('async function syncCloudOrders(', 'async function handleStaffLogin(')}
     ${section('async function markOrdersPaid(', 'function renderKitchen(')}
+    function clearIssuedQrSessionState() {}
     ${section('async function continueOwnerSession(', 'function setPlatformError(')}
     function loadCloudDataIntoApp(){ saveState(); return Promise.resolve(true); }
     globalThis.getState = () => state;`, c);
