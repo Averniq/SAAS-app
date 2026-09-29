@@ -743,7 +743,9 @@ function addToCart(itemId, options = []) {
 }
 
 function openOrdersForTable(tableId) {
-  return state.orders.filter((order) => order.tableId === tableId && order.status !== "Paid" && order.status !== "Cancelled");
+  return state.orders.filter((order) => order.tableId === tableId
+    && order.status !== "Cancelled"
+    && order.confirmedPayment?.paymentStatus !== "paid");
 }
 
 function tableTotal(tableId) {
@@ -892,7 +894,7 @@ function applyAuthoritativePaymentOperations(cloudOrders, operations, context) {
     order.confirmedPayment = { paymentId: latest.id, amountCents: latest.amountCents, paidCents, remainingCents, paymentStatus,
       idempotencyKey: record?.confirmedPayment?.idempotencyKey || "", method: latest.paymentMethod, confirmedAt: latest.recordedAt };
     order.payment = { method: latest.paymentMethod, paidAt: paymentStatus === "paid" ? latest.recordedAt : null, id: latest.id, amountCents: latest.amountCents };
-    if (paymentStatus === "paid") { order.status = "Paid"; order.closedAt = latest.recordedAt; }
+    if (paymentStatus === "paid") order.closedAt = latest.recordedAt;
   });
 }
 
@@ -2238,6 +2240,7 @@ async function updateOrderStatus(orderId, status) {
   }
   const order = state.orders.find((entry) => entry.id === orderId);
   if (!order) return;
+  if (order.cloudId && kitchenStatusUpdateIds.has(orderId)) return;
   const previousStatus = order.status;
   const previousServedAt = order.servedAt;
   order.status = status;
@@ -2246,7 +2249,6 @@ async function updateOrderStatus(orderId, status) {
   render();
 
   if (!order.cloudId) return;
-  if (kitchenStatusUpdateIds.has(orderId)) return;
   kitchenStatusUpdateIds.add(orderId);
   try {
     await window.TableOrderCloud.updateOrderStatus(order.cloudId, status);
@@ -2293,7 +2295,7 @@ async function markOrdersPaid(orders, method = "Card") {
     showOrderToast("The requested order is no longer available. Refresh the Front Desk list before recording payment.", "warning");
     return;
   }
-  if (orders.some((order) => order.status === "Paid")) {
+  if (orders.some((order) => order.confirmedPayment?.paymentStatus === "paid")) {
     showOrderToast("This order is already paid according to the authoritative ledger.", "warning");
     return;
   }
@@ -2332,10 +2334,7 @@ async function markOrdersPaid(orders, method = "Card") {
       const original = cloudOrders[index];
       const order = state.orders.find((entry) => entry.cloudId === original.cloudId) || original;
       order.confirmedPayment = { ...result, idempotencyKey: original.paymentAttempt.idempotencyKey, method: original.paymentAttempt.method, confirmedAt: paidAt };
-      if (result.paymentStatus === "paid") {
-        order.status = "Paid";
-        order.closedAt = paidAt;
-      }
+      if (result.paymentStatus === "paid") order.closedAt = paidAt;
       order.payment = { method: original.paymentAttempt.method, paidAt: result.paymentStatus === "paid" ? paidAt : null, id: result.paymentId, amountCents: result.amountCents };
       delete order.paymentAttempt;
       confirmedCount++;

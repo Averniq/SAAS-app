@@ -1,51 +1,148 @@
--- Tenant-scoped front-desk payment recording. Direct order table updates stay revoked.
-create or replace function public.record_restaurant_order_payment(
+-- Current clean-state Front Desk payment ledger. Financial settlement is
+-- separate from the Kitchen order lifecycle and never writes orders.status.
+begin;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'orders_restaurant_id_id_key' and conrelid = 'public.orders'::regclass) then
+    alter table public.orders add constraint orders_restaurant_id_id_key unique (restaurant_id, id);
+  end if;
+end;
+$$;
+
+create table public.payment_operations (
+  id uuid primary key default gen_random_uuid(),
+  restaurant_id uuid not null references public.restaurants(id) on delete restrict,
+  order_id uuid not null,
+  amount_cents integer not null check (amount_cents > 0),
+  payment_method text not null check (payment_method in ('Cash','Card','EFTPOS','Other')),
+  payment_reference text not null default '' check (length(payment_reference) <= 80),
+  note text not null default '' check (length(note) <= 200),
+  idempotency_key uuid not null,
+  payload_fingerprint text not null check (payload_fingerprint ~ '^[a-f0-9]{64}$'),
+  recorded_by uuid not null references auth.users(id) on delete restrict,
+  recorded_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  result_snapshot jsonb not null,
+  unique (restaurant_id, idempotency_key),
+  foreign key (restaurant_id, order_id) references public.orders(restaurant_id, id) on delete restrict
+);
+
+create index payment_operations_order_recorded_idx on public.payment_operations(restaurant_id, order_id, recorded_at desc);
+create index payment_operations_actor_recorded_idx on public.payment_operations(restaurant_id, recorded_by, recorded_at desc);
+create index payment_operations_restaurant_recorded_idx on public.payment_operations(restaurant_id, recorded_at desc, id desc);
+
+alter table public.payment_operations enable row level security;
+create policy "payment operations finance read" on public.payment_operations for select to authenticated
+  using (public.has_restaurant_role(restaurant_id, array['owner','manager','cashier']));
+revoke all on table public.payment_operations from public, anon, authenticated;
+
+create or replace function public.record_authoritative_payment(
   p_restaurant_id uuid,
   p_order_id uuid,
-  p_method text
+  p_amount_cents integer,
+  p_method text,
+  p_reference text default '',
+  p_note text default '',
+  p_idempotency_key uuid default gen_random_uuid()
 )
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions, pg_temp
 as $$
 declare
-  target_role text;
-  updated_order public.orders;
+  v_role text;
+  v_order public.orders;
+  v_existing public.payment_operations;
+  v_total_cents integer;
+  v_paid_cents integer;
+  v_fingerprint text;
+  v_result jsonb;
+  v_operation_id uuid;
 begin
   if auth.uid() is null then raise exception 'AUTH_REQUIRED'; end if;
-  if p_method not in ('Cash', 'Card', 'EFTPOS', 'Other') then raise exception 'INVALID_PAYMENT_METHOD'; end if;
+  select role into v_role from public.restaurant_staff
+    where restaurant_id = p_restaurant_id and user_id = auth.uid();
+  if v_role not in ('owner','manager','cashier') then raise exception 'CASHIER_ROLE_REQUIRED'; end if;
+  if p_amount_cents is null or p_amount_cents <= 0 then raise exception 'INVALID_PAYMENT_AMOUNT'; end if;
+  if p_method not in ('Cash','Card','EFTPOS','Other') then raise exception 'INVALID_PAYMENT_METHOD'; end if;
+  if p_idempotency_key is null then raise exception 'IDEMPOTENCY_KEY_REQUIRED'; end if;
+  if length(coalesce(p_reference,'')) > 80 or length(coalesce(p_note,'')) > 200 then raise exception 'PAYMENT_METADATA_TOO_LONG'; end if;
+  if p_method = 'Other' and trim(coalesce(p_note,'')) = '' then raise exception 'OTHER_PAYMENT_NOTE_REQUIRED'; end if;
 
-  select role into target_role
-  from public.restaurant_staff
-  where restaurant_id = p_restaurant_id and user_id = auth.uid();
-
-  if target_role not in ('owner', 'manager', 'staff', 'cashier') then
-    raise exception 'CASHIER_ROLE_REQUIRED';
+  v_fingerprint := encode(digest(jsonb_build_object(
+    'restaurant_id',p_restaurant_id,'order_id',p_order_id,'amount_cents',p_amount_cents,
+    'method',p_method,'reference',trim(coalesce(p_reference,'')),'note',trim(coalesce(p_note,''))
+  )::text, 'sha256'), 'hex');
+  perform pg_advisory_xact_lock(hashtextextended(p_restaurant_id::text || ':' || p_idempotency_key::text, 0));
+  select * into v_existing from public.payment_operations
+    where restaurant_id = p_restaurant_id and idempotency_key = p_idempotency_key;
+  if v_existing.id is not null then
+    if v_existing.payload_fingerprint is distinct from v_fingerprint then raise exception 'IDEMPOTENCY_KEY_REUSED'; end if;
+    return v_existing.result_snapshot || jsonb_build_object('idempotent_replay',true);
   end if;
 
-  update public.orders
-  set status = 'completed',
-      closed_at = coalesce(closed_at, now()),
-      paid_at = coalesce(paid_at, now()),
-      payment_method = p_method,
-      updated_at = now()
-  where id = p_order_id
-    and restaurant_id = p_restaurant_id
-    and status not in ('cancelled', 'completed')
-  returning * into updated_order;
+  select * into v_order from public.orders
+    where id = p_order_id and restaurant_id = p_restaurant_id for update;
+  if v_order.id is null then raise exception 'ORDER_NOT_FOUND'; end if;
+  if v_order.status = 'cancelled' then raise exception 'PAYMENT_NOT_ALLOWED_FOR_TERMINAL_ORDER'; end if;
+  v_total_cents := round(v_order.total * 100)::integer;
+  if v_total_cents <= 0 then raise exception 'ORDER_NOT_PAYABLE'; end if;
+  select coalesce(sum(amount_cents),0) into v_paid_cents from public.payment_operations
+    where restaurant_id = p_restaurant_id and order_id = p_order_id;
+  if p_amount_cents > v_total_cents - v_paid_cents then raise exception 'PAYMENT_EXCEEDS_REMAINING_BALANCE'; end if;
 
-  if updated_order.id is null then raise exception 'ORDER_NOT_PAYABLE'; end if;
-  return jsonb_build_object(
-    'id', updated_order.id,
-    'restaurant_id', updated_order.restaurant_id,
-    'status', updated_order.status,
-    'payment_method', updated_order.payment_method,
-    'paid_at', updated_order.paid_at
+  v_paid_cents := v_paid_cents + p_amount_cents;
+  v_operation_id := gen_random_uuid();
+  v_result := jsonb_build_object(
+    'payment_id',v_operation_id,'amount_cents',p_amount_cents,'paid_cents',v_paid_cents,
+    'remaining_cents',v_total_cents-v_paid_cents,
+    'payment_status',case when v_paid_cents = v_total_cents then 'paid' when v_paid_cents > 0 then 'partial' else 'unpaid' end,
+    'idempotent_replay',false
   );
+  insert into public.payment_operations(id,restaurant_id,order_id,amount_cents,payment_method,payment_reference,note,idempotency_key,payload_fingerprint,recorded_by,result_snapshot)
+  values(v_operation_id,p_restaurant_id,p_order_id,p_amount_cents,p_method,trim(coalesce(p_reference,'')),trim(coalesce(p_note,'')),p_idempotency_key,v_fingerprint,auth.uid(),v_result);
+  update public.orders
+  set paid_at = case when v_paid_cents = v_total_cents then coalesce(paid_at, now()) else null end,
+      payment_method = case when v_paid_cents = v_total_cents then p_method else payment_method end,
+      closed_at = case when v_paid_cents = v_total_cents then coalesce(closed_at, now()) else closed_at end,
+      updated_at = now()
+  where id = p_order_id and restaurant_id = p_restaurant_id;
+  return v_result;
 end;
 $$;
 
-revoke all on function public.record_restaurant_order_payment(uuid,uuid,text) from public;
-grant execute on function public.record_restaurant_order_payment(uuid,uuid,text) to authenticated;
+create or replace function public.list_authoritative_payment_operations(p_restaurant_id uuid, p_order_id uuid default null)
+returns jsonb
+language plpgsql stable
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare v_role text;
+begin
+  if auth.uid() is null then raise exception 'AUTH_REQUIRED'; end if;
+  select role into v_role from public.restaurant_staff where restaurant_id = p_restaurant_id and user_id = auth.uid();
+  if v_role not in ('owner','manager','cashier') then raise exception 'FINANCIAL_READ_ACCESS_DENIED'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object(
+    'id',po.id,'order_id',po.order_id,'amount_cents',po.amount_cents,'payment_method',po.payment_method,
+    'payment_reference',po.payment_reference,'note',po.note,'recorded_at',po.recorded_at,'recorded_by',po.recorded_by
+  ) order by po.recorded_at desc, po.id desc)
+  from (select * from public.payment_operations where restaurant_id = p_restaurant_id and (p_order_id is null or order_id = p_order_id)
+        order by recorded_at desc, id desc limit 1000) po), '[]'::jsonb);
+end;
+$$;
+
+do $$
+begin
+  if to_regprocedure('public.record_restaurant_order_payment(uuid,uuid,text)') is not null then
+    revoke all on function public.record_restaurant_order_payment(uuid,uuid,text) from public, anon, authenticated;
+  end if;
+end;
+$$;
+revoke all on function public.record_authoritative_payment(uuid,uuid,integer,text,text,text,uuid) from public, anon;
+revoke all on function public.list_authoritative_payment_operations(uuid,uuid) from public, anon;
+grant execute on function public.record_authoritative_payment(uuid,uuid,integer,text,text,text,uuid), public.list_authoritative_payment_operations(uuid,uuid) to authenticated;
+
+commit;
 notify pgrst, 'reload schema';
