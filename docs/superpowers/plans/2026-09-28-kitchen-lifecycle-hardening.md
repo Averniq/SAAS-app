@@ -31,12 +31,12 @@
 ### Task 1: Atomic database lifecycle contract
 
 **Files:**
-- Create: `supabase/migrations/<generated>_harden_kitchen_order_lifecycle.sql`
+- Modify: `supabase/migrations/005_all_round_staff.sql`
 - Test: `tests/test-kitchen-order-lifecycle.mjs`
 
 - [ ] Write disposable-fixture tests for valid transitions, rejected transitions, cancellation policy, roles, tenants, anonymous calls, and concurrent stale mutations.
 - [ ] Run the lifecycle test against a clean local Supabase instance and verify it fails against the existing RPC.
-- [ ] Generate and implement the append-only migration: lock the target order, check membership and role, validate the exact previous state, update atomically, and return the row's authoritative status.
+- [ ] Implement the clean-schema RPC definition: lock the target order, check membership and role, validate the exact previous state, update atomically, and return the row's authoritative status.
 - [ ] Run the lifecycle test and verify it passes.
 
 ### Task 2: Kitchen and Front Desk client behavior

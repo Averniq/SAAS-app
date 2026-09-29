@@ -1,13 +1,7 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 
-const migrationsDir = join(process.cwd(), 'supabase', 'migrations');
-const migrationName = readdirSync(migrationsDir).find((name) => name.includes('harden_kitchen_order_lifecycle'));
-
-assert.ok(migrationName, 'a clean-state Kitchen lifecycle migration must exist');
-
-const sql = readFileSync(join(migrationsDir, migrationName), 'utf8');
+const sql = readFileSync('supabase/migrations/005_all_round_staff.sql', 'utf8');
 
 for (const action of ['Preparing', 'Ready', 'Served', 'Cancelled']) {
   assert.match(sql, new RegExp(`p_action[^\\n]*${action}|${action}[^\\n]*p_action`, 'i'), `migration must recognize ${action}`);

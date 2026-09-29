@@ -61,47 +61,52 @@ create or replace function public.update_restaurant_order_status(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
 declare
-  target_status text;
   target_role text;
-  updated_order public.orders;
+  current_order public.orders;
+  target_status text;
 begin
   if auth.uid() is null then raise exception 'AUTH_REQUIRED'; end if;
   select role into target_role from public.restaurant_staff
   where restaurant_id = p_restaurant_id and user_id = auth.uid();
-
   if target_role is null then raise exception 'RESTAURANT_ACCESS_DENIED'; end if;
-  if p_action not in ('Preparing','Ready','Served','Paid','Cancelled') then
-    raise exception 'INVALID_ORDER_ACTION';
+  select * into current_order from public.orders
+  where id = p_order_id and restaurant_id = p_restaurant_id
+  for update;
+  if current_order.id is null then raise exception 'ORDER_NOT_FOUND'; end if;
+  if p_action not in ('Preparing','Ready','Served','Cancelled') then
+    raise exception 'INVALID_KITCHEN_ACTION';
   end if;
   if p_action in ('Preparing','Ready','Served') and target_role not in ('owner','manager','staff','kitchen') then
     raise exception 'KITCHEN_ROLE_REQUIRED';
   end if;
-  if p_action = 'Paid' and target_role not in ('owner','manager','staff','cashier') then
-    raise exception 'CASHIER_ROLE_REQUIRED';
+  if p_action = 'Cancelled' and target_role not in ('owner','manager') then
+    raise exception 'CANCELLATION_ROLE_REQUIRED';
   end if;
-
-  target_status := case p_action
-    when 'Preparing' then 'preparing' when 'Ready' then 'ready'
-    when 'Served' then 'completed' when 'Paid' then 'completed'
-    when 'Cancelled' then 'cancelled'
+  if p_action = 'Cancelled' and current_order.paid_at is not null then
+    raise exception 'PAID_ORDER_CANNOT_BE_CANCELLED';
+  end if;
+  target_status := case
+    when current_order.status = 'new' and p_action = 'Preparing' then 'preparing'
+    when current_order.status = 'preparing' and p_action = 'Ready' then 'ready'
+    when current_order.status = 'ready' and p_action = 'Served' then 'completed'
+    when current_order.status in ('new','preparing') and p_action = 'Cancelled' then 'cancelled'
+    else null
   end;
-
+  if target_status is null then raise exception 'INVALID_KITCHEN_TRANSITION'; end if;
   update public.orders
   set status = target_status,
-      served_at = case when p_action = 'Served' then now() else served_at end,
-      closed_at = case when p_action in ('Paid','Cancelled') then now() else closed_at end,
+      served_at = case when target_status = 'completed' then now() else served_at end,
+      closed_at = case when target_status = 'cancelled' then now() else closed_at end,
       updated_at = now()
-  where id = p_order_id and restaurant_id = p_restaurant_id
-  returning * into updated_order;
-
-  if updated_order.id is null then raise exception 'ORDER_NOT_FOUND'; end if;
+  where id = current_order.id
+  returning * into current_order;
   return jsonb_build_object(
-    'id', updated_order.id, 'restaurant_id', updated_order.restaurant_id,
-    'status', updated_order.status, 'served_at', updated_order.served_at,
-    'closed_at', updated_order.closed_at, 'updated_at', updated_order.updated_at
+    'id', current_order.id, 'restaurant_id', current_order.restaurant_id,
+    'status', current_order.status, 'served_at', current_order.served_at,
+    'closed_at', current_order.closed_at, 'updated_at', current_order.updated_at
   );
 end;
 $$;

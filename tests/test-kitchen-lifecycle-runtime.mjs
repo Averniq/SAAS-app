@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 const container = `aveniq-kitchen-${randomUUID().slice(0, 8)}`;
-const migration = readFileSync('supabase/migrations/20260929000000_harden_kitchen_order_lifecycle.sql', 'utf8');
+const migration = readFileSync('supabase/migrations/005_all_round_staff.sql', 'utf8');
 const run = (args, input = '') => {
   const result = spawnSync('docker', args, { input, encoding: 'utf8' });
   if (result.status !== 0) throw new Error(result.stderr || result.stdout);
@@ -32,10 +32,12 @@ try {
     if (attempt === 29) throw new Error('local PostgreSQL did not become ready');
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
   }
-  sql(`create role anon; create role authenticated;
+  sql(`create extension if not exists pgcrypto;
+create role anon; create role authenticated;
 create schema auth;
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true),'')::uuid $$;
 create table public.restaurant_staff(restaurant_id uuid not null,user_id uuid not null,role text not null,unique(restaurant_id,user_id));
+create table public.restaurant_invites(id uuid primary key default gen_random_uuid(),restaurant_id uuid not null,email text not null,role text not null,status text not null default 'pending',invited_by uuid);
 create table public.orders(id uuid primary key,restaurant_id uuid not null,status text not null,paid_at timestamptz,served_at timestamptz,closed_at timestamptz,updated_at timestamptz not null default now());
 ${migration}`);
   sql(`insert into public.restaurant_staff(restaurant_id,user_id,role) values
