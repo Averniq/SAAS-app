@@ -763,7 +763,7 @@ function orderTax(order) {
 }
 
 function orderTotal(order) {
-  return orderLineTotal(order);
+  return order.items?.length ? orderLineTotal(order) : Number(order.total) || 0;
 }
 
 function paymentAmountCents(order) {
@@ -2238,8 +2238,6 @@ async function updateOrderStatus(orderId, status) {
   }
   const order = state.orders.find((entry) => entry.id === orderId);
   if (!order) return;
-  if (kitchenStatusUpdateIds.has(orderId)) return;
-  kitchenStatusUpdateIds.add(orderId);
   const previousStatus = order.status;
   const previousServedAt = order.servedAt;
   order.status = status;
@@ -2248,6 +2246,8 @@ async function updateOrderStatus(orderId, status) {
   render();
 
   if (!order.cloudId) return;
+  if (kitchenStatusUpdateIds.has(orderId)) return;
+  kitchenStatusUpdateIds.add(orderId);
   try {
     await window.TableOrderCloud.updateOrderStatus(order.cloudId, status);
     lastCloudSyncAt = new Date();

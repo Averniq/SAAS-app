@@ -19,6 +19,7 @@ assert.match(sql, /status = 'preparing'.*p_action = 'Ready'/is, 'only Preparing 
 assert.match(sql, /status = 'ready'.*p_action = 'Served'/is, 'only Ready may become Served');
 assert.match(sql, /target_role not in \('owner','manager','staff','kitchen'\)/i, 'only Kitchen-capable restaurant members may progress');
 assert.match(sql, /p_action = 'Cancelled'.*target_role not in \('owner','manager'\)/is, 'only owner or manager may cancel');
+assert.match(sql, /p_action = 'Cancelled'.*paid_at is not null/is, 'a paid order must not be cancelled through Kitchen status');
 assert.doesNotMatch(sql, /['"]Paid['"]/i, 'Kitchen RPC must never accept Paid');
 
 console.log('Kitchen lifecycle database contract: PASS');

@@ -54,6 +54,10 @@ begin
     raise exception 'CANCELLATION_ROLE_REQUIRED';
   end if;
 
+  if p_action = 'Cancelled' and current_order.paid_at is not null then
+    raise exception 'PAID_ORDER_CANNOT_BE_CANCELLED';
+  end if;
+
   target_status := case
     when current_order.status = 'new' and p_action = 'Preparing' then 'preparing'
     when current_order.status = 'preparing' and p_action = 'Ready' then 'ready'
