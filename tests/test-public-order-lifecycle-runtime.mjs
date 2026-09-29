@@ -13,6 +13,7 @@ function source(name) {
   return app.slice(start, end);
 }
 const functions = ['isCanonicalPublicOrderRoute', 'publicOrderDraftStorageKey',
+  'publicOrderTrackingStorageKey', 'persistPublicOrderTracking', 'restorePublicOrderTracking',
   'createPublicOrderIdempotencyKey', 'isValidPublicOrderIdempotencyKey',
   'publicOrderDraftNote', 'persistPublicOrderDraft', 'restorePublicOrderDraft',
   'clearPublicOrderDraft', 'submitOrder'];
@@ -79,7 +80,8 @@ assert.deepEqual(attempts, [originalKey, originalKey]);
 assert.equal(restored.sandbox.state.orders.length, 1);
 assert.equal(restored.sandbox.state.cart.length, 0);
 assert.equal(restored.sandbox.publicOrderIdempotencyKey, '');
-assert.equal(restored.storage.size, 0);
+assert.equal(restored.storage.size, 1, 'successful confirmation retains only token-scoped customer tracking');
+assert.equal(JSON.parse(restored.storage.get(restored.sandbox.publicOrderTrackingStorageKey()))[0].cloudId, 'canonical-order');
 assert.equal(restored.note.value, '');
 restored.sandbox.state.cart = JSON.parse(originalCart);
 restored.sandbox.persistPublicOrderDraft();

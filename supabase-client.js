@@ -460,22 +460,10 @@
     const session = await getSession();
     const tenantId = restaurantId || activeMembership?.restaurantId || activePlatformDashboard?.restaurantId;
     if (!session || !tenantId) throw new Error("Restaurant context is missing.");
-    try {
-      return await request("rpc/update_restaurant_order_status", {
-        method: "POST",
-        accessToken: session.access_token,
-        body: JSON.stringify({ p_restaurant_id: tenantId, p_order_id: orderId, p_action: status })
-      });
-    } catch (error) {
-      const migrationMissing = error.status === 404 || /update_restaurant_order_status|schema cache|could not find/i.test(error.message);
-      if (!migrationMissing) throw error;
-      const statusToDatabase = { Preparing: "preparing", Ready: "ready", Served: "completed", Cancelled: "cancelled" };
-      const body = { status: statusToDatabase[status] || String(status).toLowerCase() };
-      const timestamp = new Date().toISOString();
-      if (status === "Served") body.served_at = timestamp;
-      if (status === "Cancelled") body.closed_at = timestamp;
-      return scopedPatch("orders", orderId, tenantId, body);
-    }
+    return request("rpc/update_restaurant_order_status", {
+      method: "POST", accessToken: session.access_token,
+      body: JSON.stringify({ p_restaurant_id: tenantId, p_order_id: orderId, p_action: status })
+    });
   }
 
   async function recordAuthoritativePayment(orderId, payment, restaurantId) {

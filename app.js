@@ -336,6 +336,7 @@ let orderToastTimer = null;
 let lastConfirmedOrderId = "";
 let kitchenAlertTimer = null;
 let highlightedKitchenOrderIds = new Set();
+let kitchenStatusUpdateIds = new Set();
 let customerStatusTimer = null;
 let customerStatusBusy = false;
 let customerStatusError = "";
@@ -777,6 +778,15 @@ function canRecordAuthoritativePayment() {
   return ["owner", "manager", "cashier"].includes(staffUser?.role);
 }
 
+function kitchenActionsFor(status, role) {
+  const canProgress = ["owner", "manager", "staff", "kitchen"].includes(role);
+  const canCancel = ["owner", "manager"].includes(role);
+  if (status === "New" && canProgress) return [{ status: "Preparing", label: "Start Preparing", primary: true }, ...(canCancel ? [{ status: "Cancelled", label: "Cancel", danger: true }] : [])];
+  if (status === "Preparing" && canProgress) return [{ status: "Ready", label: "Mark Ready", primary: true }, ...(canCancel ? [{ status: "Cancelled", label: "Cancel", danger: true }] : [])];
+  if (status === "Ready" && canProgress) return [{ status: "Served", label: "Mark Served", primary: true }];
+  return [];
+}
+
 function createPaymentAttempt(order, payment) {
   const existing = order.paymentAttempt;
   if (existing?.idempotencyKey && Number.isSafeInteger(existing.amountCents)) return existing;
@@ -898,6 +908,30 @@ function publicOrderDraftStorageKey() {
   return `${PUBLIC_ORDER_DRAFT_STORAGE_PREFIX}${lockedTableToken}`;
 }
 
+function publicOrderTrackingStorageKey() {
+  return `${PUBLIC_ORDER_DRAFT_STORAGE_PREFIX}tracking:${lockedTableToken}`;
+}
+
+function persistPublicOrderTracking() {
+  if (!isCanonicalPublicOrderRoute()) return;
+  const orders = state.orders.filter((order) => order.customerTracked && order.cloudId).slice(0, 5).map((order) => ({
+    id: order.id, cloudId: order.cloudId, number: order.number, tableId: order.tableId,
+    status: order.status, createdAt: order.createdAt, createdLabel: order.createdLabel,
+    total: order.total, cloudStatus: "synced", customerTracked: true
+  }));
+  if (orders.length) sessionStorage.setItem(publicOrderTrackingStorageKey(), JSON.stringify(orders));
+  else sessionStorage.removeItem(publicOrderTrackingStorageKey());
+}
+
+function restorePublicOrderTracking() {
+  if (!isCanonicalPublicOrderRoute()) return;
+  try {
+    const orders = JSON.parse(sessionStorage.getItem(publicOrderTrackingStorageKey()) || "[]");
+    if (!Array.isArray(orders)) return;
+    state.orders = orders.filter((order) => order && order.cloudId && order.customerTracked).map((order) => ({ ...order, items: [] }));
+  } catch { sessionStorage.removeItem(publicOrderTrackingStorageKey()); }
+}
+
 function createPublicOrderIdempotencyKey() {
   const randomUuid = crypto.randomUUID?.();
   if (randomUuid) return randomUuid;
@@ -928,6 +962,7 @@ function persistPublicOrderDraft() {
 function restorePublicOrderDraft() {
   if (!isCanonicalPublicOrderRoute() || publicOrderDraftRestored) return;
   publicOrderDraftRestored = true;
+  restorePublicOrderTracking();
   try {
     const draft = JSON.parse(sessionStorage.getItem(publicOrderDraftStorageKey()) || "null");
     if (!draft || !Array.isArray(draft.cart)) return;
@@ -1976,6 +2011,7 @@ function dismissTrackedCustomerOrder(orderId) {
   const order = state.orders.find((entry) => entry.id === orderId);
   if (!order) return;
   order.customerTracked = false;
+  persistPublicOrderTracking();
   saveState();
   renderCustomerOrderStatus();
 }
@@ -2074,6 +2110,7 @@ async function syncCustomerOrderStatuses() {
       order.cloudStatus = "synced";
     });
     customerStatusError = "";
+    persistPublicOrderTracking();
     saveState();
     renderCustomerOrderStatus();
   } catch (error) {
@@ -2170,6 +2207,7 @@ async function submitOrder() {
       document.getElementById("orderNote").value = "";
       clearPublicOrderDraft();
       publicOrderIdempotencyKey = "";
+      persistPublicOrderTracking();
     }
     lastConfirmedOrderId = order.id;
     showOrderSuccessModal(order);
@@ -2200,6 +2238,8 @@ async function updateOrderStatus(orderId, status) {
   }
   const order = state.orders.find((entry) => entry.id === orderId);
   if (!order) return;
+  if (kitchenStatusUpdateIds.has(orderId)) return;
+  kitchenStatusUpdateIds.add(orderId);
   const previousStatus = order.status;
   const previousServedAt = order.servedAt;
   order.status = status;
@@ -2220,6 +2260,10 @@ async function updateOrderStatus(orderId, status) {
     render();
     setCloudSyncStatus("offline", "Offline");
     showOrderToast(`Status was not updated: ${error.message}`, "warning");
+    await syncCloudOrders({ notify: false });
+  } finally {
+    kitchenStatusUpdateIds.delete(orderId);
+    renderKitchen();
   }
 }
 
@@ -2369,12 +2413,7 @@ function renderKitchen() {
           </div>
           <div>${lines}</div>
           ${order.note ? `<p class="muted"><strong>Note:</strong> ${escapeHtml(order.note)}</p>` : ""}
-          <div class="status-actions">
-            <button data-status="${order.id}:Preparing">Preparing</button>
-            <button data-status="${order.id}:Ready">Ready</button>
-            <button data-status="${order.id}:Served">Served</button>
-            <button class="danger-action" data-status="${order.id}:Cancelled">Cancel</button>
-          </div>
+          <div class="status-actions">${kitchenActionsFor(order.status, staffUser?.role).map((action) => `<button class="${action.primary ? "primary-button" : ""} ${action.danger ? "danger-action" : ""}" data-status="${order.id}:${action.status}" ${kitchenStatusUpdateIds.has(order.id) ? "disabled" : ""}>${action.label}</button>`).join("")}</div>
         </article>
       `;
     })
@@ -2422,7 +2461,7 @@ function renderInvoice() {
   if (!allTables().some((table) => table.id === selectedFrontTableId)) selectedFrontTableId = allTables()[0].id;
   const table = allTables().find((entry) => entry.id === selectedFrontTableId) || allTables()[0];
   const orders = openOrdersForTable(table.id);
-  const lines = orders.flatMap((order) => order.items.map((item) => ({ ...item, orderNumber: order.number })));
+  const lines = orders.flatMap((order) => order.items.map((item) => ({ ...item, orderNumber: order.number, orderStatus: order.status })));
   const subtotal = orders.reduce((sum, order) => sum + orderSubtotal(order), 0);
   const tax = orders.reduce((sum, order) => sum + orderTax(order), 0);
   const total = orders.reduce((sum, order) => sum + orderTotal(order), 0);
@@ -2466,7 +2505,7 @@ function renderInvoice() {
         .map(
           (item) => `
             <div class="line-row">
-              <span>${item.quantity} x ${escapeHtml(item.name)}<p class="muted">${optionSummary(item.options) || "No options"} - Order #${item.orderNumber}</p></span>
+              <span>${item.quantity} x ${escapeHtml(item.name)}<p class="muted">${optionSummary(item.options) || "No options"} - Order #${item.orderNumber} · ${escapeHtml(item.orderStatus || "New")}</p></span>
               <strong>${money(item.price * item.quantity)}</strong>
             </div>
           `
