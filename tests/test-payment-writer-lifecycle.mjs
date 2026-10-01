@@ -41,9 +41,9 @@ for (const role of ['staff', 'platform_admin', 'kitchen', 'customer']) test(`${r
   await c.markOrdersPaid(c.state.orders);
   assert.equal(calls, 0); assert.match(c.messages[0], /permission is not available/);
 });
-for (const role of ['owner', 'manager', 'cashier']) test(`${role} confirmed payment clears UUID`, async () => {
+for (const role of ['owner', 'manager', 'cashier']) test(`${role} confirmed payment clears UUID without changing the Kitchen lifecycle`, async () => {
   const c = harness(role); await c.markOrdersPaid(c.state.orders);
-  assert.equal(c.state.orders[0].status, 'Paid'); assert.equal(c.state.orders[0].paymentAttempt, undefined);
+  assert.equal(c.state.orders[0].status, 'New'); assert.equal(c.state.orders[0].paymentAttempt, undefined);
 });
 test('ambiguous failure retains identical payload and UUID across refresh with payment metadata', async () => {
   const c = harness();
@@ -63,7 +63,7 @@ test('batch partial failure clears successful attempt and retains failed attempt
     return { paymentId: randomUUID(), paymentStatus: 'paid', amountCents: 1000 };
   };
   await c.markOrdersPaid(c.state.orders);
-  assert.equal(c.state.orders[0].status, 'Paid');
+  assert.equal(c.state.orders[0].status, 'New');
   assert.equal(c.state.orders[0].paymentAttempt, undefined);
   assert.ok(c.state.orders[1].paymentAttempt);
 });

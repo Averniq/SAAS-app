@@ -83,7 +83,7 @@ test('02 refresh attempted while committed response waits is fenced', async () =
   const pending = c.markOrdersPaid(c.state.orders);
   await tick(); const readsBeforeBlockedRefresh = reads;
   await c.syncCloudOrders(); assert.equal(reads, readsBeforeBlockedRefresh);
-  response.resolve(paid()); await pending; await tick(); assert.equal(c.state.orders[0].status, 'Paid');
+  response.resolve(paid()); await pending; await tick(); assert.equal(c.state.orders[0].status, 'New');
 });
 test('03 ledger read begun before a payment generation cannot overwrite confirmation', async () => {
   const { c } = harness(); const ledgerRead = deferred();
@@ -91,10 +91,10 @@ test('03 ledger read begun before a payment generation cannot overwrite confirma
   c.window.TableOrderCloud.listAuthoritativePaymentOperations = () => ledgerRead.promise;
   const refresh = c.syncCloudOrders(); await tick();
   c.paymentSubmissionGeneration++;
-  c.state.orders[0].status = 'Paid';
+  c.state.orders[0].status = 'New';
   c.state.orders[0].confirmedPayment = { paidCents: 1000, remainingCents: 0 };
   ledgerRead.resolve([]); await refresh;
-  assert.equal(c.state.orders[0].status, 'Paid');
+  assert.equal(c.state.orders[0].status, 'New');
   assert.equal(c.state.orders[0].confirmedPayment.remainingCents, 0);
 });
 test('04 refreshes cannot complete out of order because only one runs', async () => {
@@ -151,7 +151,7 @@ test('09 an unselected table is hydrated before its order can be paid', async ()
   await c.markOrdersPaid([otherOrder]);
   const reconciled = c.state.orders.find(order => order.cloudId === 'order-b');
   assert.equal(writes, 0, 'the already-paid canonical order must not be submitted again');
-  assert.equal(reconciled.status, 'Paid');
+  assert.equal(reconciled.status, 'New');
   assert.equal(reconciled.confirmedPayment.remainingCents, 0);
 });
 test('10 duplicate click sends one RPC and creates one UUID', async () => {
@@ -164,7 +164,7 @@ test('11 rendering failure after canonical success is not reported as payment fa
   const { c } = harness(); let renders = 0;
   c.render = () => { if (++renders === 2) throw new Error('UI rendering failed after commit'); };
   await c.markOrdersPaid(c.state.orders); await tick();
-  assert.equal(c.state.orders[0].status, 'Paid'); assert.equal(c.state.orders[0].paymentAttempt, undefined);
+  assert.equal(c.state.orders[0].status, 'New'); assert.equal(c.state.orders[0].paymentAttempt, undefined);
   assert.equal(c.messages.some(message => message.includes('Payment was not confirmed')), false, 'must distinguish committed payment from subsequent UI callback failure');
 });
 test('12 three orders reconcile independent results in request order', async () => {
@@ -174,7 +174,7 @@ test('12 three orders reconcile independent results in request order', async () 
   const batch = c.markOrdersPaid(c.state.orders);
   await tick();
   responses[2].resolve(paid()); responses[0].resolve(paid()); responses[1].reject(new Error('lost'));
-  await batch; await tick(); assert.deepEqual(Array.from(c.state.orders, o => o.status), ['Paid', 'New', 'Paid']);
+  await batch; await tick(); assert.deepEqual(Array.from(c.state.orders, o => o.status), ['New', 'New', 'New']);
 });
 test('confirmed partial response clears UUID without falsely marking order Paid', async () => {
   // Client line total is $10; authoritative total is $15 (e.g. a stale client).
@@ -218,7 +218,7 @@ test('canonical partial receipt hydrates and next attempt uses remaining cents w
   assert.match(c.document.getElementById('invoicePanel').html, /Remaining after confirmed payments/);
   await c.markOrdersPaid(c.state.orders);
   assert.equal(sent[0].amountCents, 500); assert.ok(sent[0].idempotencyKey);
-  assert.equal(c.state.orders[0].status, 'Paid');
+  assert.equal(c.state.orders[0].status, 'New');
 });
 test('confirmed receipt persists across app reload through canonical ledger hydration', async () => {
   const { c } = harness(); c.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation()];
@@ -226,7 +226,7 @@ test('confirmed receipt persists across app reload through canonical ledger hydr
   const { c: reloaded } = harness(); reloaded.state.orders = JSON.parse(c.snapshots.at(-1));
   reloaded.window.TableOrderCloud.loadOrders = async () => [order()];
   reloaded.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation()];
-  await reloaded.syncCloudOrders(); assert.equal(reloaded.state.orders[0].status, 'Paid');
+  await reloaded.syncCloudOrders(); assert.equal(reloaded.state.orders[0].status, 'New');
   assert.equal(reloaded.state.orders[0].confirmedPayment.remainingCents, 0);
 });
 test('legacy paid timestamps alone do not assert ledger-confirmed Paid', () => {
