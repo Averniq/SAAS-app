@@ -20,6 +20,7 @@ assert.match(serviceWorker, /if \(request\.mode === "navigate" \|\| isMutableShe
 
 assert.match(app, /document\.getElementById\("confirmReviewOrder"\)\?\.addEventListener\("click", submitOrder\)/, "a missing review confirmation control must not abort public-token startup");
 assert.match(app, /loadCloudDataIntoApp\(\{ silent: true \}\)/, "public-token startup must still load canonical cloud context");
-assert.doesNotMatch(netlify, /https:\/\/\*\.supabase\.(co|in)/i, "the local-only candidate must not retain hosted Supabase CSP references");
+assert.match(netlify, /connect-src[^;]*'self'[^;]*https:\/\/\*\.supabase\.co[^;]*wss:\/\/\*\.supabase\.co/i, "the production client must permit only its HTTPS/WSS Supabase API origins alongside same-origin requests");
+assert.doesNotMatch(netlify, /https:\/\/\*\.supabase\.in/i, "the CSP must not allow the unrelated supabase.in domain");
 
 console.log("Public token shell safety regression: PASS");
