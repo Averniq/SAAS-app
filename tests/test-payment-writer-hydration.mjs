@@ -51,7 +51,7 @@ function page({ storage = new Map(), operations = [], cloudRow = row() } = {}) {
 test('fresh device hydrates a fully paid order from the canonical ledger', async () => {
   const { c } = page({ operations: [operation(1000)] });
   await c.syncCloudOrders();
-  assert.equal(c.getOrders()[0].status, 'Paid');
+  assert.equal(c.getOrders()[0].status, 'New'); assert.equal(c.getOrders()[0].confirmedPayment.paymentStatus, 'paid');
   assert.equal(c.getOrders()[0].confirmedPayment.remainingCents, 0);
 });
 
@@ -72,7 +72,7 @@ test('hydration uses the cloud order total instead of stale item-line totals', a
 test('second terminal reconciles payment recorded by another terminal before payment', async () => {
   const { c } = page({ operations: [operation(1000)] });
   await c.syncCloudOrders();
-  assert.equal(c.getOrders()[0].status, 'Paid');
+  assert.equal(c.getOrders()[0].status, 'New'); assert.equal(c.getOrders()[0].confirmedPayment.paymentStatus, 'paid');
 });
 
 test('ledger hydration preserves an unresolved locally persisted UUID', async () => {
@@ -109,5 +109,5 @@ test('overpayment conflict reconciles first, then retires the known-rejected UUI
   };
   await c.markOrdersPaid(c.getOrders());
   assert.notEqual(replacementKey, submittedIdempotencyKey());
-  assert.equal(c.getOrders()[0].status, 'Paid');
+  assert.equal(c.getOrders()[0].status, 'New'); assert.equal(c.getOrders()[0].confirmedPayment.paymentStatus, 'paid');
 });
