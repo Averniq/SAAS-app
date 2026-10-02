@@ -95,7 +95,7 @@ test('confirmed receipt survives actual owner-session reload', async () => {
   c.window.TableOrderCloud.recordAuthoritativePayment = async () => paid(); await c.markOrdersPaid(c.getState().orders); await tick();
   const { c: reloaded } = page(storage); reloaded.window.TableOrderCloud.listAuthoritativePaymentOperations = async () => [ledgerOperation()];
   await reloaded.continueOwnerSession(); await tick();
-  assert.equal(reloaded.getState().orders[0].status, 'Paid'); assert.equal(reloaded.getState().orders[0].paymentAttempt, undefined);
+  assert.equal(reloaded.getState().orders[0].status, 'New'); assert.equal(reloaded.getState().orders[0].confirmedPayment.paymentStatus, 'paid'); assert.equal(reloaded.getState().orders[0].paymentAttempt, undefined);
 });
 test('stale sync response after restaurant/profile switch cannot replace current orders', async () => {
   const { c } = page(); await c.continueOwnerSession(); await tick(); const response = deferred();
@@ -116,7 +116,7 @@ test('stale payment response cannot mutate new tenant or release its active subm
   oldResponse.resolve(paid()); await oldPayment;
   assert.equal(c.paymentSubmissionInProgress, true); assert.equal(c.getState().orders[0].confirmedPayment, undefined);
   assert.ok(JSON.parse(storage.get('aveniq-payment-financial-v1:tenant-a')).records['order-a'].paymentAttempt);
-  newConfirmed = true; newResponse.resolve(paid()); await newPayment; await tick(); assert.equal(c.getState().orders[0].status, 'Paid');
+  newConfirmed = true; newResponse.resolve(paid()); await newPayment; await tick(); assert.equal(c.getState().orders[0].status, 'New'); assert.equal(c.getState().orders[0].confirmedPayment.paymentStatus, 'paid');
 });
 test('persistence corruption or unavailable storage blocks RPC before submission', async () => {
   for (const mode of ['corrupt', 'unavailable']) {
@@ -157,7 +157,7 @@ test('temporary persistence failure after canonical confirmation cannot resurrec
     return paid();
   };
   await c.markOrdersPaid(c.getState().orders); await tick();
-  assert.equal(c.getState().orders[0].status, 'Paid');
+  assert.equal(c.getState().orders[0].status, 'New'); assert.equal(c.getState().orders[0].confirmedPayment.paymentStatus, 'paid');
   assert.equal(c.getState().orders[0].paymentAttempt, undefined, 'confirmed UUID resurrected from stale disk state');
   assert.equal(JSON.parse(storage.get('aveniq-payment-financial-v1:tenant-a')).records['order-a'].paymentAttempt, undefined);
 });

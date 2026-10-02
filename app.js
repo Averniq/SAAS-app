@@ -2457,8 +2457,21 @@ function renderFrontDesk() {
 function renderInvoice() {
   const panel = document.getElementById("invoicePanel");
   const profile = restaurant();
-  if (!allTables().some((table) => table.id === selectedFrontTableId)) selectedFrontTableId = allTables()[0].id;
-  const table = allTables().find((entry) => entry.id === selectedFrontTableId) || allTables()[0];
+  const tables = allTables();
+  if (!tables.length) {
+    panel.paymentFormContext = "";
+    panel.innerHTML = `
+      <div class="invoice-header">
+        <div>
+          <p class="eyebrow">Front Desk</p>
+          <h3>No active tables are available</h3>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  if (!tables.some((table) => table.id === selectedFrontTableId)) selectedFrontTableId = tables[0].id;
+  const table = tables.find((entry) => entry.id === selectedFrontTableId) || tables[0];
   const orders = openOrdersForTable(table.id);
   const lines = orders.flatMap((order) => order.items.map((item) => ({ ...item, orderNumber: order.number, orderStatus: order.status })));
   const subtotal = orders.reduce((sum, order) => sum + orderSubtotal(order), 0);

@@ -242,6 +242,13 @@ test('invoice payment fields do not transfer to a different table', () => {
   c.renderInvoice();
   assert.equal(fields.get('paymentMethod').value, 'Card'); assert.equal(fields.get('paymentNote').value, ''); assert.equal(fields.get('paymentReference').value, '');
 });
+test('empty table state does not crash the Front Desk render during authenticated startup', () => {
+  const { c, fields } = harness();
+  c.allTables = () => [];
+  c.state.orders = [];
+  assert.doesNotThrow(() => c.renderInvoice());
+  assert.match(fields.get('invoicePanel').html, /No active tables are available/);
+});
 test('manual Paid status invocation is denied before mutation or RPC regardless of casing', async () => {
   const { c } = harness(); let calls = 0; c.window.TableOrderCloud.updateOrderStatus = async () => { calls++; };
   for (const status of ['Paid', 'paid', 'PAID', ' Paid ']) await c.updateOrderStatus('order-a', status);
