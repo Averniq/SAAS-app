@@ -15,7 +15,7 @@ function build(overrides = {}) {
   return spawnSync(process.execPath, ['scripts/build-site.mjs'], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, ...overrides }
+    env: { ...process.env, CONTEXT: '', AVENIQ_PUBLIC_CONFIG_MODE: '', AVENIQ_SUPABASE_URL: '', AVENIQ_SUPABASE_PUBLISHABLE_KEY: '', ...overrides }
   });
 }
 
@@ -30,7 +30,60 @@ function assertSuccess(result, label) {
   assert.equal(result.status, 0, `${label}: ${result.stderr || result.stdout}`);
 }
 
+// Regressions: Netlify preview contexts and local development must not inherit
+// the checked-in hosted backend, even when a development override is supplied.
+for (const overrides of [
+  { CONTEXT: 'deploy-preview' },
+  { CONTEXT: 'branch-deploy' },
+  { CONTEXT: 'deploy-preview', AVENIQ_PUBLIC_CONFIG_MODE: 'development' },
+  { CONTEXT: 'branch-deploy', AVENIQ_PUBLIC_CONFIG_MODE: 'development' },
+  { CONTEXT: 'deploy-preview', AVENIQ_PUBLIC_CONFIG_MODE: 'production' },
+  { CONTEXT: 'branch-deploy', AVENIQ_PUBLIC_CONFIG_MODE: 'production' },
+  { AVENIQ_PUBLIC_CONFIG_MODE: 'preview' },
+  { AVENIQ_PUBLIC_CONFIG_MODE: 'development' },
+  {}
+]) {
+  const disabled = build({ ...overrides, AVENIQ_SUPABASE_SERVICE_ROLE_KEY: serviceRoleSentinel });
+  assertSuccess(disabled, 'unconfigured preview/development must publish a safe disabled artifact');
+  const { source, config } = generatedConfig();
+  assert.equal(config.url, '', 'unconfigured preview must have no backend URL');
+  assert.equal(config.publishableKey, '', 'unconfigured preview must have no backend credential');
+  assert.ok(!source.includes(serviceRoleSentinel));
+  const html = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
+  assert.match(html, /Backend disabled/i);
+  assert.doesNotMatch(html, /<script\b|<iframe\b|<link\b|https?:\/\//i, 'disabled entrypoint must not load the app or external resources');
+  assert.match(html, /connect-src 'none'/, 'disabled entrypoint must prohibit connections');
+  let requests = 0;
+  const browser = vm.createContext({ window: { TABLEORDER_SUPABASE: config, localStorage: { getItem: () => null } }, fetch: () => { requests++; throw new Error('unexpected request'); } });
+  vm.runInContext(readFileSync(new URL('../dist/supabase-client.js', import.meta.url), 'utf8'), browser);
+  await assert.rejects(browser.window.TableOrderCloud.request('restaurants'), /configuration is missing/i);
+  await assert.rejects(browser.window.TableOrderCloud.signInWithPassword('local@example.invalid', 'unused-test-value'), /configuration is missing/i);
+  assert.equal(requests, 0, 'even directly invoked disabled REST/Auth clients must make zero requests');
+  const checkedIn = vm.createContext({ window: {} });
+  vm.runInContext(readFileSync(new URL('../supabase-config.js', import.meta.url), 'utf8'), checkedIn);
+  for (const file of readdirSync(new URL('../dist/', import.meta.url), { recursive: true, withFileTypes: true })) {
+    if (!file.isFile()) continue;
+    const content = readFileSync(`${file.parentPath}/${file.name}`, 'utf8');
+    for (const value of [checkedIn.window.TABLEORDER_SUPABASE.url, checkedIn.window.TABLEORDER_SUPABASE.publishableKey, serviceRoleSentinel]) {
+      assert.ok(!value || !content.includes(value), 'disabled artifact must exclude checked-in backend and service credentials');
+    }
+  }
+}
+
+for (const context of ['deploy-preview', 'branch-deploy']) {
+  const explicit = build({ CONTEXT: context, AVENIQ_SUPABASE_URL: 'https://disposable-preview.supabase.co', AVENIQ_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_disposable_preview' });
+  assertSuccess(explicit, 'Netlify preview must accept a validated explicit disposable pair');
+  assert.equal(generatedConfig().config.url, 'https://disposable-preview.supabase.co');
+  assert.equal(generatedConfig().config.publishableKey, 'sb_publishable_disposable_preview');
+  assert.notEqual(build({ CONTEXT: context, AVENIQ_SUPABASE_URL: 'https://disposable-preview.supabase.co' }).status, 0, 'incomplete preview pair must fail closed');
+  assert.notEqual(build({ CONTEXT: context, AVENIQ_SUPABASE_URL: 'https://disposable-preview.supabase.co/rest/v1', AVENIQ_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_disposable_preview' }).status, 0, 'preview pair must use strict origin validation');
+  const secretRejected = build({ CONTEXT: context, AVENIQ_SUPABASE_URL: 'https://disposable-preview.supabase.co', AVENIQ_SUPABASE_PUBLISHABLE_KEY: serviceRoleSentinel });
+  assert.notEqual(secretRejected.status, 0);
+  assert.ok(!`${secretRejected.stdout}${secretRejected.stderr}`.includes(serviceRoleSentinel));
+}
+
 const production = build({
+  CONTEXT: 'production',
   AVENIQ_PUBLIC_CONFIG_MODE: 'production',
   AVENIQ_SUPABASE_URL: 'https://new-project.supabase.co',
   AVENIQ_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_new_project',
@@ -65,6 +118,12 @@ const netlifyProductionPreviewOverride = build({
   CONTEXT: 'production', AVENIQ_PUBLIC_CONFIG_MODE: 'preview', AVENIQ_SUPABASE_URL: '', AVENIQ_SUPABASE_PUBLISHABLE_KEY: ''
 });
 assert.notEqual(netlifyProductionPreviewOverride.status, 0, 'a production deployment must not be downgraded to preview mode by an override');
+
+const netlifyProductionDevelopmentOverride = build({
+  CONTEXT: 'production', AVENIQ_PUBLIC_CONFIG_MODE: 'development',
+  AVENIQ_SUPABASE_URL: 'https://new-project.supabase.co', AVENIQ_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_new_project'
+});
+assert.notEqual(netlifyProductionDevelopmentOverride.status, 0, 'even a complete pair must not downgrade Production to development');
 
 const productionServiceRole = build({
   AVENIQ_PUBLIC_CONFIG_MODE: 'production',

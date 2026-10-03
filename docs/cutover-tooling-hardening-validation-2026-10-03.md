@@ -18,7 +18,7 @@ All commands below passed in the hardening worktree:
 - `node tests/test-cutover-credential-safety.mjs`: accepted hosted/explicit-loopback origins; path/HTTP/arbitrary HTTPS/deceptive/query/hash/userinfo/malformed/LAN/loopback-alias rejection; no request to an invalid host; redirect target received zero requests; sentinel absent from captured CLI stdout/stderr and thrown errors.
 - `node tests/test-initial-owner-bootstrap-contract.mjs`: existing identity, atomic dry-run, platform-admin refusal, existing-owner conflict, no Auth provisioning.
 - `node tests/test-initial-owner-bootstrap-database-contract.mjs`: canonical primitive signature, transaction locking and service-only ACL contract.
-- `node tests/test-build-public-supabase-config.mjs`: production missing/invalid configuration fails closed; runtime service/secret credentials rejected; local preview configuration; served config verification; no sentinel in intended source or generated dist.
+- `node tests/test-build-public-supabase-config.mjs`: production missing/invalid configuration fails closed; runtime service/secret credentials rejected; disabled Netlify preview/branch/development builds and explicit disposable configuration; served config verification; no sentinel in intended source or generated dist.
 - `node scripts/run-local-supabase-integration-gate.mjs`: **35 checks**, fresh lexical replay of **22 canonical migrations** in a unique disposable Docker stack. Two different eligible operators launched concurrently: exactly one success, one `INITIAL_OWNER_ALREADY_BOUND`, one matching claim/membership/owner pointer, no partial membership or platform-admin escalation. Staff conflicts/missing identities fail closed; forced post-claim insert failure rolls back all state; anon/authenticated execution denied; normal owner invitation successfully creates a second owner. Existing QR scope/rotation/expiry/idempotency, tenant/RLS, authoritative payment and Kitchen lifecycle contracts pass.
 - `node tests/test-kitchen-lifecycle-contract.mjs`, `node tests/test-qr-session-boundary.mjs`, `node tests/test-p0-deploy-01-product-preservation.mjs`: passed.
 - Local **production-mode** `pnpm run build` with nonfunctional validation-only hosted URL/publishable key: passed, without hosted network access. It is not a Production deployment. Existing Browserslist/caniuse-lite freshness warning remains informational.
@@ -56,3 +56,30 @@ Independent Sol QA and security reviews found no remaining confirmed blocker in 
 13. `docs/cutover-tooling-hardening-validation-2026-10-03.md`
 
 The runbook documents exact public/operator variable names, strict generated/served config, atomic bootstrap, secret handling, service-worker/fresh-browser verification and a coherent prior frontend/backend/config/physical-QR rollback pair. Unrelated changes in the primary checkout are excluded. Do not merge or deploy this PR automatically.
+
+## PR #8 review fixes — 3 October 2026
+
+Continued the same branch and implementation after review of head `2846aa5914c1dae8281931d0f2e7c634e9efa4c4`; no implementation restart or unrelated browser workflow repeat.
+
+### Preview isolation
+
+The prior context selection recognised only Netlify Production, so deploy-preview and branch-deploy inherited the development checked-in hosted configuration. The generator now recognises all three contexts. Production requires an explicit validated public pair and rejects mode downgrades. Deploy-preview/branch-deploy always use preview behaviour: no pair generates a successful, static **Backend disabled** artifact, empty backend URL/key, no app/Auth/service-worker-registration scripts, and a connection-denying CSP. Local default/development/preview builds likewise never read the checked-in hosted config. A partial/invalid pair fails closed; a complete explicit disposable pair enables the normal app using the existing shared origin/key validation.
+
+Regression tests first failed on the inherited hosted URL, then passed after the fix. Tests scan every disabled dist artifact for the checked-in URL/key and runtime secret, and directly invoke the real REST/Auth client with disabled config to assert zero fetches. Complete explicit hosted disposable preview pairs, branch-deploy, mode overrides, strict URL rejection, missing Production values, and service-credential rejection pass. Explicit hosted values remain an operator-approved selection: they cannot inherently prove disposability. The runbook requires separate context scoping and fresh/reloaded previews; already open/offline legacy clients are not retroactively revoked by a new artifact.
+
+### Migration installation atomicity
+
+Updated the requested unapplied canonical candidate `20261003090000_initial_owner_bootstrap_claim.sql` in place. Explicit BEGIN/COMMIT now encloses table, SECURITY DEFINER function, empty search_path and service-only ACL creation. NOTIFY follows commit. First-owner runtime lock/conflict/concurrency semantics are unchanged.
+
+The local gate injects division-by-zero immediately after function creation and before its REVOKE boundary. It asserts that exact fault was reached, then checks from a fresh connection that neither claim table nor function survives. This regression failed without the transaction and passes with it. Normal replay then succeeds.
+
+### Final executed validation
+
+- Build-config, credential-safety, both bootstrap contract tests, Kitchen lifecycle, QR session boundary, and product-preservation tests passed.
+- Final isolated local gate passed **35 checks**, replaying **22 canonical migrations** with the migration-failure rollback assertion. Concurrent first-owner attempts produced exactly one success and one explicit conflict; service-only ACL, no partial state/escalation, and normal second-owner invitation passed.
+- Full local `pnpm run build` with `CONTEXT=deploy-preview` and no public pair passed; empty generated config and disabled HTML verified. No deployment was performed.
+- Full local `pnpm run build` with `CONTEXT=production`, explicit nonfunctional validation-only URL/key, and runtime fake service-secret sentinel passed. It made no hosted backend request.
+- Credential scans passed for both full builds: **13 intended source files and 142 dist artifacts**; final staged scan also passed. Fake secret absent from CLI stdout/stderr/error checks and browser config/artifacts.
+- Relevant JavaScript syntax checks, working/staged `git diff --check`, and independent Sol QA/security reviews passed with no blocking findings. Existing Browserslist freshness warning remains non-blocking.
+
+Six intended follow-up files: build generator, build-config test, local integration runner, initial-owner migration, cutover runbook, and this validation report. No new migration was added. Production Supabase/Auth/SQL, credentials, Netlify configuration/environments, deployments, DNS and cutover remain untouched. PR #8 stays open against main; no merge is authorised. The final pushed head SHA is reported separately, not replaced with the earlier release baseline.

@@ -1,5 +1,7 @@
 -- Unapplied cutover candidate. This claim governs only the initial transition;
 -- normal owner invitation workflows may still add additional owners afterward.
+begin;
+
 create table public.initial_owner_bootstrap_claims (
   restaurant_id uuid primary key references public.restaurants(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete restrict,
@@ -37,4 +39,6 @@ end;
 $$;
 revoke all on function public.claim_initial_restaurant_owner(uuid,uuid,boolean) from public, anon, authenticated;
 grant execute on function public.claim_initial_restaurant_owner(uuid,uuid,boolean) to service_role;
+commit;
+
 notify pgrst, 'reload schema';

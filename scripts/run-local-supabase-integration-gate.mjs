@@ -153,9 +153,24 @@ async function startStack() {
     await new Promise(resolveWait => setTimeout(resolveWait, 500));
   }
   const migrations = (await readdir(join(root, 'supabase/migrations'))).filter(file => file.endsWith('.sql')).sort();
-  for (const file of migrations) await sql(await readFile(join(root, 'supabase/migrations', file), 'utf8'));
+  for (const file of migrations) {
+    const source = await readFile(join(root, 'supabase/migrations', file), 'utf8');
+    if (file === '20261003090000_initial_owner_bootstrap_claim.sql') {
+      gatePhase = 'initial-owner-migration-atomicity';
+      // Fail after SECURITY DEFINER creation but before its ACL is tightened.
+      // A disconnected failed psql session must leave neither object visible.
+      const injected = source.replace(/\nrevoke all on function/i, '\nselect 1 / 0;\nrevoke all on function');
+      assert.notEqual(injected, source, 'migration fault injection must reach the ACL boundary');
+      const failed = await command(['exec', '-e', 'PGPASSWORD=postgres', '-i', names.db, 'psql', '-X', '-qAt', '-U', 'supabase_admin', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'], injected);
+      assert.notEqual(failed.code, 0, 'injected migration failure must abort');
+      assert.ok(/division by zero/i.test(failed.stderr), 'failure must reach the injected post-function/pre-ACL boundary');
+      assert.equal((await sql("select to_regclass('public.initial_owner_bootstrap_claims') is null, to_regprocedure('public.claim_initial_restaurant_owner(uuid,uuid,boolean)') is null;")).trim(), 't|t', 'failed migration must not leave a table or default-public SECURITY DEFINER RPC');
+    }
+    gatePhase = 'canonical-migration-replay';
+    await sql(source);
+  }
   await sql("alter role authenticator password 'postgres'; alter role supabase_auth_admin password 'postgres';");
-  pass(`fresh canonical replay (${migrations.length} migrations)`);
+  pass(`fresh canonical replay (${migrations.length} migrations; initial-owner migration fault rollback verified)`);
   await docker(['run', '-d', '--name', names.auth, '--network', names.network, '--network-alias', 'auth', '-e', 'GOTRUE_API_HOST=0.0.0.0', '-e', 'GOTRUE_API_PORT=9999', '-e', 'GOTRUE_DB_DRIVER=postgres', '-e', 'GOTRUE_DB_DATABASE_URL=postgresql://supabase_auth_admin:postgres@db:5432/postgres', '-e', `GOTRUE_JWT_SECRET=${secret}`, '-e', `GOTRUE_JWT_KEYS=${jwtKeys}`, '-e', 'GOTRUE_JWT_AUD=authenticated', '-e', 'GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated', '-e', `GOTRUE_JWT_ISSUER=http://127.0.0.1:${apiPort}/auth/v1`, '-e', `API_EXTERNAL_URL=http://127.0.0.1:${apiPort}/auth/v1`, '-e', 'GOTRUE_JWT_EXP=3600', '-e', 'GOTRUE_JWT_ADMIN_ROLES=service_role', '-e', 'GOTRUE_SITE_URL=http://127.0.0.1', '-e', 'GOTRUE_URI_ALLOW_LIST=http://127.0.0.1', '-e', 'GOTRUE_DISABLE_SIGNUP=false', '-e', 'GOTRUE_MAILER_AUTOCONFIRM=true', '-e', 'GOTRUE_EXTERNAL_EMAIL_ENABLED=true', '-e', 'GOTRUE_MAILER_OTP_EXP=3600', '-e', 'GOTRUE_PASSWORD_MIN_LENGTH=8', 'public.ecr.aws/supabase/gotrue:v2.196.0']);
   await docker(['run', '-d', '--name', names.rest, '--network', names.network, '--network-alias', 'rest', '-e', 'PGRST_DB_URI=postgresql://authenticator:postgres@db:5432/postgres', '-e', 'PGRST_DB_SCHEMAS=public,graphql_public', '-e', 'PGRST_DB_ANON_ROLE=anon', '-e', 'PGRST_DB_EXTRA_SEARCH_PATH=public,extensions', '-e', 'PGRST_DB_MAX_ROWS=1000', '-e', `PGRST_JWT_SECRET=${JSON.stringify({ keys: JSON.parse(jwtKeys) })}`, '-e', 'PGRST_JWT_AUD=authenticated', 'public.ecr.aws/supabase/postgrest:v16.2']);
   await docker(['create', '--name', names.kong, '--network', names.network, '-p', `127.0.0.1:${apiPort}:8000`, '-e', 'KONG_DATABASE=off', '-e', 'KONG_DECLARATIVE_CONFIG=/home/kong/kong.yml', '-e', 'KONG_PLUGINS=cors', 'public.ecr.aws/supabase/kong:2.8.1']);
