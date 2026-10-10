@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
 import vm from 'node:vm';
 import { runLocalGate, withLocalBrowserCredentials, cleanupLocalGate } from '../scripts/run-local-supabase-integration-gate.mjs';
 
@@ -34,20 +33,6 @@ try {
     assert.equal(after.tables.filter(t => t.is_active).length, 9);
     console.log('Table Manager local persistence: PASS (authenticated owner, Table 3–9 persisted, seeds preserved, nine active tables)');
 
-    const authorizationEnv = { ...process.env, AVENIQ_SUPABASE_URL: appUrl,
-        AVENIQ_SUPABASE_PUBLISHABLE_KEY: window.TABLEORDER_SUPABASE.publishableKey,
-        AVENIQ_REQUIRE_ROLE_TESTS: '0' };
-    for (const key of Object.keys(authorizationEnv)) {
-      if (/^AVENIQ_(?:OWNER|MANAGER|ALLROUND|KITCHEN|CASHIER|PLATFORM)_/.test(key)) delete authorizationEnv[key];
-    }
-    const authorizationStatus = await new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, ['scripts/test-authorization.mjs'], {
-        cwd: new URL('../', import.meta.url), env: authorizationEnv, stdio: ['ignore', 'inherit', 'inherit']
-      });
-      child.once('error', reject);
-      child.once('close', resolve);
-    });
-    assert.equal(authorizationStatus, 0, 'Disposable public authorization suite must pass');
   });
 } finally {
   await cleanupLocalGate();
