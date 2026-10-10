@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
 import { runLocalGate, withLocalBrowserCredentials, cleanupLocalGate } from '../scripts/run-local-supabase-integration-gate.mjs';
 
 // The gate provisions only unique disposable Docker resources; it accepts no hosted config.
@@ -9,7 +10,7 @@ try {
   await withLocalBrowserCredentials(async ({ appUrl, ownerEmail, password }) => {
     assert.equal(new URL(appUrl).hostname, '127.0.0.1');
     const storage = new Map();
-    const window = { location: { pathname: '/dashboard/sake-street/tables', search: '' },
+    const window = { crypto: webcrypto, location: { pathname: '/dashboard/sake-street/tables', search: '' },
       localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) } };
     vm.runInNewContext(await (await fetch(`${appUrl}/supabase-config.js`)).text(), { window });
     assert.equal(window.TABLEORDER_SUPABASE.url, appUrl);
@@ -28,6 +29,7 @@ try {
     const before = await cloud.loadRestaurantData();
     assert.deepEqual(Array.from(before.tables, t => t.table_number).sort((a, b) => a - b), [1, 2]);
     const original = Array.from(before.tables, t => t.id).sort();
+    const seedTokens = new Map(Array.from(before.tables, t => [t.id, t.table_token]));
 
     // Run the real UI creation and cloud-reload functions, replacing only rendering/DOM.
     const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
@@ -81,6 +83,8 @@ try {
       assert.equal(table.restaurant_id, profile.restaurantId);
       assert.equal(table.sort_order, number);
       assert.equal(table.is_active, true);
+      assert.equal(table.local_id, `table_${1791631349336 + number}`);
+      assert.ok(/^tk_[0-9A-F]{32}$/.test(table.table_token));
       assert.equal(state.tables.length, number);
     }
     const after = await cloud.loadRestaurantData();
@@ -88,9 +92,30 @@ try {
     assert.deepEqual(Array.from(after.tables).filter(t => t.table_number <= 2).map(t => t.id).sort(), original);
     assert.equal(after.tables.filter(t => t.is_active).length, 9);
     assert.equal(new Set(Array.from(after.tables, t => t.table_number)).size, 9);
+    assert.equal(new Set(Array.from(after.tables, t => t.table_token)).size, 9);
+    assert.ok(after.tables.filter(t => t.table_number <= 2).every(t => t.table_token === seedTokens.get(t.id)), 'Seed internal tokens must remain unchanged');
     assert.ok(after.tables.every(t => t.table_number >= 1 && t.table_number <= 9));
     assert.equal(await ui.reloadTables(), true);
     assert.deepEqual(Array.from(state.tables, t => t.number), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    assert.ok(state.tables.every(t => !Object.hasOwn(t, 'table_token')), 'Internal tokens must not enter UI table state');
+    const added = after.tables.filter(t => t.table_number >= 3);
+    const metadata = await cloud.getPublicQrTableTokenMetadata(profile.restaurantId);
+    assert.ok(metadata.filter(row => added.some(t => t.id === row.table_id)).every(row => !row.has_active_token), 'Table creation must not issue public QR tokens');
+    const publicContext = async token => {
+      const response = await fetch(`${appUrl}/rest/v1/rpc/get_public_qr_order_context`, { method: 'POST',
+        headers: { apikey: window.TABLEORDER_SUPABASE.publishableKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_token: token }) });
+      return { ok: response.ok, data: await response.json() };
+    };
+    for (const table of added) assert.equal((await publicContext(table.table_token)).ok, false, 'Internal identity must not authorize public ordering');
+    const table3 = added.find(t => t.table_number === 3);
+    const issued = await cloud.issuePublicQrTableToken(profile.restaurantId, table3.id);
+    assert.ok(issued.token && issued.token !== table3.table_token, 'Public QR issuance must use a separate identity');
+    const context = await publicContext(issued.token);
+    assert.equal(context.ok, true);
+    assert.equal(context.data.table.id, table3.id);
+    assert.equal((await publicContext(table3.table_token)).ok, false);
+    console.log('Table Manager internal/public token separation: PASS (unique internal identities, seeds unchanged, no implicit QR issuance, internal tokens denied, explicit disposable QR resolves correctly)');
     console.log('Table Manager local persistence: PASS (real UI/owner API, Table 3–9 names/tenant/sort persisted, seeds preserved, nine unique active numbers, UI reload)');
 
   });

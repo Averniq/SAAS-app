@@ -534,7 +534,7 @@
     const number = Number(sortOrder) || 1;
     return request("tables", {
       method: "POST", accessToken: session?.access_token, headers: { Prefer: "return=representation" },
-      body: JSON.stringify({ restaurant_id: restaurantId, local_id: table.id, table_number: number, table_name: table.name, name: table.name, sort_order: sortOrder || number })
+      body: JSON.stringify({ restaurant_id: restaurantId, local_id: table.id, table_number: number, table_name: table.name, name: table.name, table_token: `tk_${createUuid().replace(/-/g, "").toUpperCase()}`, sort_order: sortOrder || number })
     });
   }
   function updateRestaurantTable(id, fields, restaurantId) {

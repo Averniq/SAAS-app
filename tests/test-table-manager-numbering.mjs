@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
 
 const tenant = '20000000-0000-4000-8000-000000000001';
 const requests = [];
@@ -8,6 +9,7 @@ const session = JSON.stringify({ access_token: 'fixture-owner-token',
   expires_at: Math.floor(Date.now() / 1000) + 3600,
   user: { id: '10000000-0000-4000-8000-000000000001' } });
 const window = {
+  crypto: webcrypto,
   TABLEORDER_SUPABASE: { url: 'https://fixture.invalid', publishableKey: 'fixture-public-key' },
   localStorage: { getItem: () => session },
   location: { pathname: '/dashboard/sake-street/tables', search: '' }
@@ -32,6 +34,7 @@ for (const number of [3, 4, 5, 6, 7, 8, 9]) {
   assert.equal(body.restaurant_id, tenant);
   assert.equal(body.table_name, table.name);
   assert.equal(body.name, table.name);
+  assert.ok(/^tk_[0-9A-F]{32}$/.test(body.table_token), 'Internal token must contain a full cryptographic UUID');
   assert.equal(options.method, 'POST');
   assert.equal(options.headers.Authorization, 'Bearer fixture-owner-token');
   assert.equal(rows[0].table_number, number);
@@ -68,4 +71,21 @@ for (const number of [3, 4, 5, 6, 7, 8, 9]) {
 }
 assert.equal(state.tables[0], initialTables[0]);
 assert.equal(state.tables[1], initialTables[1]);
-console.log('Table Manager numbering: PASS (timestamp Table 3–9, seed-style Table 1–2, sequence default, tenant/auth payload)');
+// Both browser crypto paths must generate independent internal identities, even
+// when local IDs repeat. No public QR RPC is involved in any of these requests.
+for (const crypto of [webcrypto, { getRandomValues: values => webcrypto.getRandomValues(values) }]) {
+  window.crypto = crypto;
+  const tokens = new Set();
+  for (let attempt = 0; attempt < 128; attempt++) {
+    await window.TableOrderCloud.createRestaurantTable(tenant, { id: 'table_1791631349336', name: 'Table 3' }, 3);
+    const token = requests.at(-1).body.table_token;
+    assert.ok(/^tk_[0-9A-F]{32}$/.test(token));
+    assert.ok(!tokens.has(token), 'Internal tokens must not be reused');
+    tokens.add(token);
+  }
+}
+window.crypto = undefined;
+const requestCount = requests.length;
+await assert.rejects(window.TableOrderCloud.createRestaurantTable(tenant, { id: 'table_1791631349336', name: 'Table 3' }, 3));
+assert.equal(requests.length, requestCount, 'Missing browser crypto must fail before insert, never use a predictable token');
+console.log('Table Manager numbering/internal tokens: PASS (Table 3–9, seeds, authenticated payload, both browser crypto paths, uniqueness, crypto unavailable fails closed)');
