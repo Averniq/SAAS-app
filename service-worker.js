@@ -1,5 +1,5 @@
-const APP_SHELL_CACHE = "aveniq-shell-v18";
-const RUNTIME_CACHE = "aveniq-runtime-v18";
+const APP_SHELL_CACHE = "aveniq-shell-v19";
+const RUNTIME_CACHE = "aveniq-runtime-v19";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -9,6 +9,7 @@ const APP_SHELL = [
   "/supabase-config.js?v=20260911-1",
   "/supabase-client.js?v=20260911-1",
   "/vendor/qrcode.js?v=20260911-1",
+  "/vendor/recovery-auth.js?v=20261013-pkce",
   "/app.js?v=20260911-1",
   "/assets/brand/sake-street-logo-mark.png",
   "/assets/brand/sake-street-logo-round.webp",
@@ -24,6 +25,7 @@ function isMutableShellAsset(url) {
     "/supabase-config.js",
     "/supabase-client.js",
     "/vendor/qrcode.js",
+    "/vendor/recovery-auth.js",
     "/app.js",
     "/manifest.webmanifest"
   ].includes(url.pathname);
@@ -55,6 +57,12 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // One-time recovery codes must not remain in the runtime navigation cache.
+  if (request.mode === "navigate" && url.pathname === "/reset-password") {
+    event.respondWith(fetch(request).catch(() => caches.match("/index.html")));
+    return;
+  }
 
   if (request.mode === "navigate" || isMutableShellAsset(url)) {
     event.respondWith(networkFirst(request));

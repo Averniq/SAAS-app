@@ -2,6 +2,7 @@
   const config = window.TABLEORDER_SUPABASE || {};
   const SESSION_KEY = "aveniq-owner-session";
   let authSession = readStoredSession();
+  let recoverySession = null;
   let activeMembership = null;
   let activePlatformDashboard = null;
 
@@ -13,7 +14,7 @@
     if (parts[0] === "dashboard" && parts[1]) return { area: parts[2] || "dashboard", restaurantSlug: parts[1], tableRef: "" };
     if (parts[0] === "r" && parts[1]) return { area: "restaurant", restaurantSlug: parts[1], tableRef: params.get("table") || "" };
     if (parts[0] === "join" && parts[1]) return { area: "join", restaurantSlug: "", tableRef: "", inviteToken: parts[1] };
-    if (["signup", "login", "onboarding", "platform"].includes(parts[0])) return { area: parts[0], restaurantSlug: params.get("restaurant") || "", tableRef: "" };
+    if (["signup", "login", "forgot-password", "reset-password", "onboarding", "platform"].includes(parts[0])) return { area: parts[0], restaurantSlug: params.get("restaurant") || "", tableRef: "" };
     return { area: "app", restaurantSlug: params.get("restaurant") || config.restaurantSlug || "demo", tableRef: params.get("table") || params.get("token") || "" };
   }
 
@@ -86,7 +87,124 @@
     return result;
   }
 
+  let recoveryClient = null;
+  let recoveryBusy = false;
+  let recoveryMemory = null;
+
+  function getRecoveryClient() {
+    if (recoveryClient) return recoveryClient;
+    if (!config.url || !config.publishableKey || !window.AveniqRecoveryAuth?.AuthClient) throw new Error("Recovery configuration is missing.");
+    const storageKey = "aveniq-password-recovery:" + new URL(config.url).host;
+    const verifierKey = storageKey + "-code-verifier";
+    // Only the PKCE verifier crosses page loads. Recovery credentials stay in memory
+    // and never share the normal login adapter's session storage.
+    const memory = new Map();
+    recoveryMemory = memory;
+    const storage = {
+      getItem(key) {
+        if (key !== verifierKey) return memory.get(key) || null;
+        try {
+          const entry = JSON.parse(window.localStorage.getItem(key) || "null");
+          if (!entry || !Number.isFinite(entry.createdAt) || Date.now() - entry.createdAt > 3600000 || entry.createdAt > Date.now()) {
+            window.localStorage.removeItem(key);
+            return null;
+          }
+          return entry.value;
+        } catch { window.localStorage.removeItem(key); return null; }
+      },
+      setItem(key, value) {
+        if (key === verifierKey) window.localStorage.setItem(key, JSON.stringify({value, createdAt: Date.now()}));
+        else memory.set(key, value);
+      },
+      removeItem(key) {
+        if (key === verifierKey) window.localStorage.removeItem(key);
+        else memory.delete(key);
+      }
+    };
+    recoveryClient = new window.AveniqRecoveryAuth.AuthClient({
+      url: config.url + "/auth/v1", headers: {apikey: config.publishableKey, Authorization: "Bearer " + config.publishableKey},
+      flowType: "pkce", storageKey, storage, persistSession: true,
+      autoRefreshToken: false, detectSessionInUrl: false, fetch: (...args) => fetch(...args)
+    });
+    return recoveryClient;
+  }
+
+  async function requestPasswordRecovery(email) {
+    try {
+      await getRecoveryClient().resetPasswordForEmail(String(email || "").trim().toLowerCase(), {
+        redirectTo: "https://app.aveniq.com.au/reset-password"
+      });
+    } catch {
+      // Keep the same response for every email and provider failure.
+    }
+  }
+
+  async function endPasswordRecovery() {
+    recoverySession = null;
+    try {
+      if (recoveryClient) await recoveryClient.signOut({scope: "local"}).catch(() => {});
+    } finally { recoveryMemory?.clear(); }
+  }
+
+  async function consumePasswordRecovery() {
+    if (recoveryBusy || recoverySession) return false;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const hasFragment = Boolean(window.location.hash);
+    window.history.replaceState({}, "", window.location.pathname);
+    // Implicit tokens and URL 'type' fields never establish recovery authority.
+    if (routeContext().area !== "reset-password" || hasFragment || params.has("error") || params.has("error_code")
+        || params.getAll("code").length !== 1 || !code) return false;
+    recoveryBusy = true;
+    try {
+      const client = getRecoveryClient();
+      const {data, error} = await client.exchangeCodeForSession(code);
+      // This context comes from the SDK's recovery-only PKCE verifier, not the URL.
+      if (error || data?.redirectType !== "PASSWORD_RECOVERY" || !data?.session?.access_token) {
+        await endPasswordRecovery();
+        return false;
+      }
+      const token = data.session.access_token;
+      const {data: identity, error: identityError} = await client.getUser(token);
+      if (identityError || !identity?.user?.id) { await endPasswordRecovery(); return false; }
+      // GET user verifies the JWT with Auth. Its signed AMR, not its user identity,
+      // establishes recovery provenance, including against relabelled normal codes.
+      const claims = JSON.parse(window.atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+      if (!claims.amr?.some(entry => entry.method === "recovery") || !Number.isFinite(claims.exp)
+          || claims.exp <= Date.now() / 1000 || claims.sub !== identity.user.id) {
+        await endPasswordRecovery();
+        return false;
+      }
+      recoverySession = {access_token: token, expires_at: claims.exp};
+      return true;
+    } catch {
+      await endPasswordRecovery();
+      return false;
+    } finally { recoveryBusy = false; }
+  }
+
+  async function updatePassword(password, confirmation) {
+    if (recoveryBusy || !recoverySession || recoverySession.expires_at <= Date.now() / 1000) throw new Error("PASSWORD_RECOVERY_SESSION_MISSING");
+    if (typeof password !== "string" || password.length < 12) throw new Error("Use at least 12 characters for your new password.");
+    if (password !== confirmation) throw new Error("The passwords do not match.");
+    recoveryBusy = true;
+    try {
+      const {error} = await getRecoveryClient().updateUser({password});
+      if (error) {
+        if ([401, 403].includes(error.status)) { await endPasswordRecovery(); throw new Error("PASSWORD_RECOVERY_SESSION_MISSING"); }
+        throw error;
+      }
+      await endPasswordRecovery();
+    } finally { recoveryBusy = false; }
+  }
+
   function consumeAuthRedirect() {
+    const recoveryParams = new URLSearchParams(window.location.hash.slice(1));
+    if (recoveryParams.get("type") === "recovery") {
+      window.location.pathname = "/reset-password";
+      return null;
+    }
+
     if (!window.location.hash.includes("access_token=")) return null;
     const params = new URLSearchParams(window.location.hash.slice(1));
     const accessToken = params.get("access_token");
@@ -559,7 +677,7 @@
     loadOrders, updateOrderStatus, recordAuthoritativePayment, listAuthoritativePaymentOperations, updateMenuItemPhoto, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
     loadReportDashboard, loadSalesReport, loadMenuReport, loadTableReport, loadHourlyReport, loadOrderReport,
     createRestaurantTable, updateRestaurantTable, deactivateRestaurantTable, updateRestaurantProfile,
-    signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, getPlatformDashboardProfile, signOut,
+    requestPasswordRecovery, consumePasswordRecovery, updatePassword, signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, getPlatformDashboardProfile, signOut,
     loadPlatformRestaurants, platformCreateRestaurant,
     createRestaurant, createTables, importSampleMenu, completeOnboarding,
     createRestaurantInvite, acceptRestaurantInvite, listRestaurantTeam, revokeRestaurantInvite
