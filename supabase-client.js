@@ -2,6 +2,7 @@
   const config = window.TABLEORDER_SUPABASE || {};
   const SESSION_KEY = "aveniq-owner-session";
   let authSession = readStoredSession();
+  let recoverySession = null;
   let activeMembership = null;
   let activePlatformDashboard = null;
 
@@ -13,7 +14,7 @@
     if (parts[0] === "dashboard" && parts[1]) return { area: parts[2] || "dashboard", restaurantSlug: parts[1], tableRef: "" };
     if (parts[0] === "r" && parts[1]) return { area: "restaurant", restaurantSlug: parts[1], tableRef: params.get("table") || "" };
     if (parts[0] === "join" && parts[1]) return { area: "join", restaurantSlug: "", tableRef: "", inviteToken: parts[1] };
-    if (["signup", "login", "onboarding", "platform"].includes(parts[0])) return { area: parts[0], restaurantSlug: params.get("restaurant") || "", tableRef: "" };
+    if (["signup", "login", "forgot-password", "reset-password", "onboarding", "platform"].includes(parts[0])) return { area: parts[0], restaurantSlug: params.get("restaurant") || "", tableRef: "" };
     return { area: "app", restaurantSlug: params.get("restaurant") || config.restaurantSlug || "demo", tableRef: params.get("table") || params.get("token") || "" };
   }
 
@@ -86,7 +87,60 @@
     return result;
   }
 
+  async function requestPasswordRecovery(email) {
+    // Always use the approved production callback, including from a preview.
+    const redirectTo = "https://app.aveniq.com.au/reset-password";
+    try {
+      await authRequest('recover?redirect_to=' + encodeURIComponent(redirectTo), {
+        method: "POST", body: JSON.stringify({ email: String(email || "").trim().toLowerCase() })
+      });
+    } catch {
+      // Match Supabase's non-enumerating response even for provider errors.
+    }
+  }
+
+  async function consumePasswordRecovery() {
+    recoverySession = null;
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    window.history.replaceState({}, "", window.location.pathname);
+    const expiresIn = Number(params.get("expires_in"));
+    const expiresAt = params.has("expires_at") ? Number(params.get("expires_at")) : Math.floor(Date.now() / 1000) + expiresIn;
+    if (routeContext().area !== "reset-password" || params.has("error") || params.has("error_code")
+        || params.get("type") !== "recovery" || !params.get("access_token") || !params.get("refresh_token")
+        || params.get("token_type") !== "bearer" || !Number.isFinite(expiresIn) || expiresIn <= 0
+        || !Number.isFinite(expiresAt) || expiresAt <= Date.now() / 1000) return false;
+    const candidate = { access_token: params.get("access_token"), expires_at: expiresAt };
+    try {
+      const user = await authRequest("user", { accessToken: candidate.access_token });
+      if (!user?.id) return false;
+      recoverySession = candidate;
+      return true;
+    } catch { return false; }
+  }
+
+  async function updatePassword(password, confirmation) {
+    if (!recoverySession || recoverySession.expires_at <= Date.now() / 1000) throw new Error("PASSWORD_RECOVERY_SESSION_MISSING");
+    if (typeof password !== "string" || password.length < 12) throw new Error("Use at least 12 characters for your new password.");
+    if (password !== confirmation) throw new Error("The passwords do not match.");
+    const token = recoverySession.access_token;
+    try {
+      await authRequest("user", { method: "PUT", accessToken: token, body: JSON.stringify({ password }) });
+    } catch (error) {
+      if ([401, 403].includes(error.status)) { recoverySession = null; throw new Error("PASSWORD_RECOVERY_SESSION_MISSING"); }
+      throw error;
+    }
+    recoverySession = null;
+    // Revoke only this recovery session, leaving other devices unaffected.
+    await authRequest("logout?scope=local", { method: "POST", accessToken: token }).catch(() => {});
+  }
+
   function consumeAuthRedirect() {
+    const recoveryParams = new URLSearchParams(window.location.hash.slice(1));
+    if (recoveryParams.get("type") === "recovery") {
+      window.location.pathname = "/reset-password";
+      return null;
+    }
+
     if (!window.location.hash.includes("access_token=")) return null;
     const params = new URLSearchParams(window.location.hash.slice(1));
     const accessToken = params.get("access_token");
@@ -559,7 +613,7 @@
     loadOrders, updateOrderStatus, recordAuthoritativePayment, listAuthoritativePaymentOperations, updateMenuItemPhoto, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
     loadReportDashboard, loadSalesReport, loadMenuReport, loadTableReport, loadHourlyReport, loadOrderReport,
     createRestaurantTable, updateRestaurantTable, deactivateRestaurantTable, updateRestaurantProfile,
-    signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, getPlatformDashboardProfile, signOut,
+    requestPasswordRecovery, consumePasswordRecovery, updatePassword, signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, getPlatformDashboardProfile, signOut,
     loadPlatformRestaurants, platformCreateRestaurant,
     createRestaurant, createTables, importSampleMenu, completeOnboarding,
     createRestaurantInvite, acceptRestaurantInvite, listRestaurantTeam, revokeRestaurantInvite

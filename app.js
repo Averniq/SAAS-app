@@ -4246,7 +4246,7 @@ function renderMobileCustomerControls(entries = cartEntries()) {
   const dock = document.getElementById("mobileCartDock");
   const nav = document.getElementById("mobileBottomNav");
   if (!dock || !nav) return;
-  const isCustomer = !staffUser && activeView === "customer";
+  const isCustomer = !staffUser && activeView === "customer" && !["forgot-password", "reset-password"].includes(APP_ROUTE.area);
   const quantity = entries.reduce((sum, entry) => sum + Number(entry.quantity || 0), 0);
   dock.classList.toggle("hidden", !isCustomer || !quantity);
   nav.classList.toggle("hidden", !isCustomer);
@@ -4600,14 +4600,77 @@ function configureOnboardingSuccessLinks() {
   document.getElementById("openRestaurantDashboard").href = `/dashboard/${encodeURIComponent(slug)}/dashboard`;
 }
 
+async function showPasswordRecovery(reset = false) {
+  setGatewayVisible(true);
+  ["ownerAuthPanel", "inviteAuthPanel", "onboardingWizard", "platformConsole"].forEach(id => document.getElementById(id).classList.add("hidden"));
+  document.getElementById("passwordRecoveryPanel").classList.remove("hidden");
+  document.getElementById("passwordRecoveryEmailField").classList.toggle("hidden", reset);
+  document.getElementById("passwordRecoveryEmail").disabled = reset;
+  document.getElementById("passwordRecoveryEmail").required = !reset;
+  for (const id of ["New", "Confirm"]) {
+    document.getElementById("passwordRecovery" + id + "Field").classList.toggle("hidden", !reset);
+    document.getElementById("passwordRecovery" + id).disabled = reset;
+    document.getElementById("passwordRecovery" + id).required = reset;
+  }
+  const button = document.getElementById("passwordRecoverySubmit");
+  if (!reset) return;
+  document.getElementById("passwordRecoveryTitle").textContent = "Choose a new password";
+  document.getElementById("passwordRecoveryDescription").textContent = "Checking your reset link…";
+  button.textContent = "Update password";
+  button.disabled = true;
+  if (!await window.TableOrderCloud.consumePasswordRecovery()) {
+    document.getElementById("passwordRecoveryDescription").textContent = "This reset link is invalid or has expired. Request a new link.";
+    document.getElementById("passwordRecoveryForm").classList.add("hidden");
+    document.getElementById("passwordRecoveryRetry").classList.remove("hidden");
+    return;
+  }
+  document.getElementById("passwordRecoveryDescription").textContent = "Enter and confirm a password with at least 12 characters.";
+  for (const id of ["New", "Confirm"]) document.getElementById("passwordRecovery" + id).disabled = false;
+  button.disabled = false;
+}
+
+async function handlePasswordRecovery(event) {
+  event.preventDefault();
+  const button = document.getElementById("passwordRecoverySubmit");
+  if (button.disabled) return;
+  const reset = APP_ROUTE.area === "reset-password";
+  button.disabled = true;
+  button.textContent = reset ? "Updating…" : "Sending…";
+  setOwnerFlowError("", "passwordRecoveryError");
+  try {
+    if (reset) await window.TableOrderCloud.updatePassword(document.getElementById("passwordRecoveryNew").value, document.getElementById("passwordRecoveryConfirm").value);
+    else await window.TableOrderCloud.requestPasswordRecovery(document.getElementById("passwordRecoveryEmail").value);
+    document.getElementById("passwordRecoveryForm").reset();
+    document.getElementById("passwordRecoveryForm").classList.add("hidden");
+    const success = document.getElementById("passwordRecoverySuccess");
+    success.textContent = reset ? "Your password has been updated. Return to login to sign in." : "If an account is eligible, a reset link will be sent. Check your inbox and spam folder. If it does not arrive, try again in a few minutes.";
+    success.classList.remove("hidden");
+    if (!reset) document.getElementById("passwordRecoveryRetry").classList.remove("hidden");
+  } catch (error) {
+    setOwnerFlowError(error.message === "PASSWORD_RECOVERY_SESSION_MISSING" ? "This reset link is invalid or has expired. Request a new one." : error.status >= 500 ? "Unable to update your password. Please try again." : error.message, "passwordRecoveryError");
+    if (error.message === "PASSWORD_RECOVERY_SESSION_MISSING") {
+      document.getElementById("passwordRecoveryForm").classList.add("hidden");
+      document.getElementById("passwordRecoveryRetry").classList.remove("hidden");
+    }
+  } finally {
+    button.disabled = false;
+    button.textContent = reset ? "Update password" : "Send reset link";
+  }
+}
+
 async function initializeAccountFlow() {
   const route = window.TableOrderCloud?.routeContext?.() || APP_ROUTE;
+  if (["forgot-password", "reset-password"].includes(route.area)) {
+    await showPasswordRecovery(route.area === "reset-password");
+    return;
+  }
   if (route.area === "legacy-order") {
     document.getElementById("customerTableName").textContent = "This customer link has expired";
     return;
   }
   if (["order", "restaurant"].includes(route.area)) return;
   window.TableOrderCloud.consumeAuthRedirect?.();
+  if (new URLSearchParams(window.location.hash.slice(1)).get("type") === "recovery") return;
   if (route.area === "join") {
     const inviteSession = await window.TableOrderCloud.getSession();
     if (inviteSession) {
@@ -4637,6 +4700,7 @@ async function initializeAccountFlow() {
 }
 
 function bindGlobalActions() {
+  document.getElementById("passwordRecoveryForm").addEventListener("submit", handlePasswordRecovery);
   document.getElementById("ownerAuthForm").addEventListener("submit", handleOwnerAuth);
   document.getElementById("inviteAuthForm").addEventListener("submit", handleInviteAuth);
   document.getElementById("toggleInviteAuthMode").addEventListener("click", () => updateInviteAuthMode(inviteAuthMode === "signup" ? "login" : "signup"));
@@ -4825,9 +4889,11 @@ function render() {
 renderTabs();
 bindGlobalActions();
 render();
+if (!["forgot-password", "reset-password"].includes(APP_ROUTE.area)) {
 checkDatabaseConnection();
 if (APP_ROUTE.area !== "legacy-order" && !isAuthenticatedDashboardRoute()) loadCloudDataIntoApp({ silent: true });
 initializeStaffAuth();
+}
 initializeAccountFlow();
 startCustomerOrderStatusSync();
 
