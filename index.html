@@ -44,7 +44,7 @@
       <section class="auth-gateway-card hidden" id="passwordRecoveryPanel">
         <p class="eyebrow">Account recovery</p>
         <h1 id="passwordRecoveryTitle">Forgot your password?</h1>
-        <p class="muted" id="passwordRecoveryDescription">Enter your email address to request a reset link.</p>
+        <p class="muted" id="passwordRecoveryDescription">Enter your email address to request a reset link. Open the link in this same browser.</p>
         <form class="auth-form" id="passwordRecoveryForm">
           <label class="field" id="passwordRecoveryEmailField"><span>Email address</span><input id="passwordRecoveryEmail" type="email" autocomplete="email" required /></label>
           <label class="field hidden" id="passwordRecoveryNewField"><span>New password (at least 12 characters)</span><input id="passwordRecoveryNew" type="password" autocomplete="new-password" minlength="12" disabled /></label>
@@ -670,6 +670,7 @@
 
     <script src="/mobile-shell.js?v=20260911-1"></script>
     <script src="/supabase-config.js?v=20260911-1"></script>
+    <script src="/vendor/recovery-auth.js?v=20261013-pkce"></script>
     <script src="/supabase-client.js?v=20260911-1"></script>
     <script src="/vendor/qrcode.js?v=20260911-1"></script>
     <script src="/app.js?v=20260911-1"></script>

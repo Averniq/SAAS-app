@@ -21,4 +21,14 @@ for (const area of ['forgot-password','reset-password']) {
   const context={document:{getElementById:id=>nodes.get(id)},APP_ROUTE:{area},staffUser:null,activeView:'customer',cartEntries:()=>[],cartTotal:()=>0,money:()=>'$0'};
   vm.createContext(context);vm.runInContext(controls,context);context.renderMobileCustomerControls();assert.equal(nodes.get('mobileBottomNav').hidden,true);assert.equal(nodes.get('mobileCartDock').hidden,true);
 }
+// Recovery code navigations bypass runtime caching, including offline fallback.
+const handlers = new Map();
+let fetchResult = 'online', cacheOpens = 0, response;
+const worker = {self:{location:{origin:'https://app.aveniq.com.au'},addEventListener:(name,handler)=>handlers.set(name,handler)},URL,fetch:async()=>{if(fetchResult==='offline')throw new Error('offline');return fetchResult;},caches:{open:()=>{cacheOpens++;},match:async()=> 'offline-shell'}};
+vm.runInNewContext(readFileSync(new URL('../service-worker.js',import.meta.url),'utf8'),worker);
+handlers.get('fetch')({request:{method:'GET',mode:'navigate',url:'https://app.aveniq.com.au/reset-password?code=one-time'},respondWith:value=>response=value});
+assert.equal(await response,'online');assert.equal(cacheOpens,0);
+fetchResult='offline';
+handlers.get('fetch')({request:{method:'GET',mode:'navigate',url:'https://app.aveniq.com.au/reset-password?code=one-time'},respondWith:value=>response=value});
+assert.equal(await response,'offline-shell');assert.equal(cacheOpens,0);
 console.log('Password recovery UI state regressions: PASS');

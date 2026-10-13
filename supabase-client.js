@@ -87,51 +87,115 @@
     return result;
   }
 
+  let recoveryClient = null;
+  let recoveryBusy = false;
+  let recoveryMemory = null;
+
+  function getRecoveryClient() {
+    if (recoveryClient) return recoveryClient;
+    if (!config.url || !config.publishableKey || !window.AveniqRecoveryAuth?.AuthClient) throw new Error("Recovery configuration is missing.");
+    const storageKey = "aveniq-password-recovery:" + new URL(config.url).host;
+    const verifierKey = storageKey + "-code-verifier";
+    // Only the PKCE verifier crosses page loads. Recovery credentials stay in memory
+    // and never share the normal login adapter's session storage.
+    const memory = new Map();
+    recoveryMemory = memory;
+    const storage = {
+      getItem(key) {
+        if (key !== verifierKey) return memory.get(key) || null;
+        try {
+          const entry = JSON.parse(window.localStorage.getItem(key) || "null");
+          if (!entry || !Number.isFinite(entry.createdAt) || Date.now() - entry.createdAt > 3600000 || entry.createdAt > Date.now()) {
+            window.localStorage.removeItem(key);
+            return null;
+          }
+          return entry.value;
+        } catch { window.localStorage.removeItem(key); return null; }
+      },
+      setItem(key, value) {
+        if (key === verifierKey) window.localStorage.setItem(key, JSON.stringify({value, createdAt: Date.now()}));
+        else memory.set(key, value);
+      },
+      removeItem(key) {
+        if (key === verifierKey) window.localStorage.removeItem(key);
+        else memory.delete(key);
+      }
+    };
+    recoveryClient = new window.AveniqRecoveryAuth.AuthClient({
+      url: config.url + "/auth/v1", headers: {apikey: config.publishableKey, Authorization: "Bearer " + config.publishableKey},
+      flowType: "pkce", storageKey, storage, persistSession: true,
+      autoRefreshToken: false, detectSessionInUrl: false, fetch: (...args) => fetch(...args)
+    });
+    return recoveryClient;
+  }
+
   async function requestPasswordRecovery(email) {
-    // Always use the approved production callback, including from a preview.
-    const redirectTo = "https://app.aveniq.com.au/reset-password";
     try {
-      await authRequest('recover?redirect_to=' + encodeURIComponent(redirectTo), {
-        method: "POST", body: JSON.stringify({ email: String(email || "").trim().toLowerCase() })
+      await getRecoveryClient().resetPasswordForEmail(String(email || "").trim().toLowerCase(), {
+        redirectTo: "https://app.aveniq.com.au/reset-password"
       });
     } catch {
-      // Match Supabase's non-enumerating response even for provider errors.
+      // Keep the same response for every email and provider failure.
     }
+  }
+
+  async function endPasswordRecovery() {
+    recoverySession = null;
+    try {
+      if (recoveryClient) await recoveryClient.signOut({scope: "local"}).catch(() => {});
+    } finally { recoveryMemory?.clear(); }
   }
 
   async function consumePasswordRecovery() {
-    recoverySession = null;
-    const params = new URLSearchParams(window.location.hash.slice(1));
+    if (recoveryBusy || recoverySession) return false;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const hasFragment = Boolean(window.location.hash);
     window.history.replaceState({}, "", window.location.pathname);
-    const expiresIn = Number(params.get("expires_in"));
-    const expiresAt = params.has("expires_at") ? Number(params.get("expires_at")) : Math.floor(Date.now() / 1000) + expiresIn;
-    if (routeContext().area !== "reset-password" || params.has("error") || params.has("error_code")
-        || params.get("type") !== "recovery" || !params.get("access_token") || !params.get("refresh_token")
-        || params.get("token_type") !== "bearer" || !Number.isFinite(expiresIn) || expiresIn <= 0
-        || !Number.isFinite(expiresAt) || expiresAt <= Date.now() / 1000) return false;
-    const candidate = { access_token: params.get("access_token"), expires_at: expiresAt };
+    // Implicit tokens and URL 'type' fields never establish recovery authority.
+    if (routeContext().area !== "reset-password" || hasFragment || params.has("error") || params.has("error_code")
+        || params.getAll("code").length !== 1 || !code) return false;
+    recoveryBusy = true;
     try {
-      const user = await authRequest("user", { accessToken: candidate.access_token });
-      if (!user?.id) return false;
-      recoverySession = candidate;
+      const client = getRecoveryClient();
+      const {data, error} = await client.exchangeCodeForSession(code);
+      // This context comes from the SDK's recovery-only PKCE verifier, not the URL.
+      if (error || data?.redirectType !== "PASSWORD_RECOVERY" || !data?.session?.access_token) {
+        await endPasswordRecovery();
+        return false;
+      }
+      const token = data.session.access_token;
+      const {data: identity, error: identityError} = await client.getUser(token);
+      if (identityError || !identity?.user?.id) { await endPasswordRecovery(); return false; }
+      // GET user verifies the JWT with Auth. Its signed AMR, not its user identity,
+      // establishes recovery provenance, including against relabelled normal codes.
+      const claims = JSON.parse(window.atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+      if (!claims.amr?.some(entry => entry.method === "recovery") || !Number.isFinite(claims.exp)
+          || claims.exp <= Date.now() / 1000 || claims.sub !== identity.user.id) {
+        await endPasswordRecovery();
+        return false;
+      }
+      recoverySession = {access_token: token, expires_at: claims.exp};
       return true;
-    } catch { return false; }
+    } catch {
+      await endPasswordRecovery();
+      return false;
+    } finally { recoveryBusy = false; }
   }
 
   async function updatePassword(password, confirmation) {
-    if (!recoverySession || recoverySession.expires_at <= Date.now() / 1000) throw new Error("PASSWORD_RECOVERY_SESSION_MISSING");
+    if (recoveryBusy || !recoverySession || recoverySession.expires_at <= Date.now() / 1000) throw new Error("PASSWORD_RECOVERY_SESSION_MISSING");
     if (typeof password !== "string" || password.length < 12) throw new Error("Use at least 12 characters for your new password.");
     if (password !== confirmation) throw new Error("The passwords do not match.");
-    const token = recoverySession.access_token;
+    recoveryBusy = true;
     try {
-      await authRequest("user", { method: "PUT", accessToken: token, body: JSON.stringify({ password }) });
-    } catch (error) {
-      if ([401, 403].includes(error.status)) { recoverySession = null; throw new Error("PASSWORD_RECOVERY_SESSION_MISSING"); }
-      throw error;
-    }
-    recoverySession = null;
-    // Revoke only this recovery session, leaving other devices unaffected.
-    await authRequest("logout?scope=local", { method: "POST", accessToken: token }).catch(() => {});
+      const {error} = await getRecoveryClient().updateUser({password});
+      if (error) {
+        if ([401, 403].includes(error.status)) { await endPasswordRecovery(); throw new Error("PASSWORD_RECOVERY_SESSION_MISSING"); }
+        throw error;
+      }
+      await endPasswordRecovery();
+    } finally { recoveryBusy = false; }
   }
 
   function consumeAuthRedirect() {

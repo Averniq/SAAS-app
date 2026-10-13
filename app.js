@@ -4619,7 +4619,7 @@ async function showPasswordRecovery(reset = false) {
   button.textContent = "Update password";
   button.disabled = true;
   if (!await window.TableOrderCloud.consumePasswordRecovery()) {
-    document.getElementById("passwordRecoveryDescription").textContent = "This reset link is invalid or has expired. Request a new link.";
+    document.getElementById("passwordRecoveryDescription").textContent = "This reset link is invalid or has expired. Open it in the browser where you requested it, or request a new link.";
     document.getElementById("passwordRecoveryForm").classList.add("hidden");
     document.getElementById("passwordRecoveryRetry").classList.remove("hidden");
     return;

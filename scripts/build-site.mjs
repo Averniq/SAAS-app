@@ -1,4 +1,5 @@
 import { cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { build as bundle } from "esbuild";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateSupabaseOrigin, isPublishableCredential } from './supabase-origin.mjs';
@@ -80,6 +81,11 @@ await Promise.all(
   )
 );
 await mkdir(resolve(output, "vendor"), { recursive: true });
+await bundle({
+  entryPoints: [resolve(root, "src", "recovery-auth.js")],
+  outfile: resolve(output, "vendor", "recovery-auth.js"),
+  bundle: true, platform: "browser", format: "iife", globalName: "AveniqRecoveryAuth", minify: true
+});
 await cp(
   resolve(root, "node_modules", "qrcode-generator", "qrcode.js"),
   resolve(output, "vendor", "qrcode.js")
