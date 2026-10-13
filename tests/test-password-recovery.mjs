@@ -35,5 +35,3 @@ h=harness('/join/invite',valid.replace('type=recovery','type=signup'));assert.ok
 for (const file of ['app.js','supabase-client.js','index.html']) {const text=readFileSync(new URL('../'+file,import.meta.url),'utf8');assert.ok(!/sb_secret_[\w-]+/.test(text));for(const match of text.matchAll(/\b[\w-]+\.([\w-]+)\.[\w-]+\b/g)){try{assert.notEqual(JSON.parse(Buffer.from(match[1],'base64url')).role,'service_role');}catch(error){if(error.code==='ERR_ASSERTION')throw error;}}}
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');assert.match(html,/href="\/forgot-password"[^>]*>Forgot password\?/);
 console.log('Password recovery Auth regressions: PASS');
-
-
