@@ -395,7 +395,8 @@
             <div class="panel-title">
               <h2>Tables</h2>
               <div class="toolbar-actions">
-                <button class="ghost-button" id="downloadAllQr" type="button">Download All</button>
+                <button class="ghost-button" id="downloadQrPackage" type="button">Save QR package</button>
+                <button class="ghost-button" id="downloadAllQr" type="button">Download All PNG</button>
                 <button class="ghost-button" id="downloadQr" type="button">Print / PDF</button>
               </div>
             </div>
@@ -623,6 +624,17 @@
         </div>
       </section>
     </div>
+
+    <dialog id="qrExportDialog" class="option-modal qr-export-dialog" aria-labelledby="qrExportTitle">
+      <h2 id="qrExportTitle">Save your QR package now</h2>
+      <p>The original links cannot be retrieved after leaving this session. Keep this file to reprint your QR cards without changing their links.</p>
+      <p id="qrExportSummary" class="muted"></p>
+      <p>Download and open the file, then confirm you have saved it. Keep the package securely; its links allow ordering at these tables.</p>
+      <div class="form-actions">
+        <button id="saveQrPackage" class="submit-button" type="button">Download QR package</button>
+        <button id="confirmQrSaved" class="ghost-button" type="button" disabled>I have saved the package</button>
+      </div>
+    </dialog>
 
     <div class="modal-backdrop hidden" id="reviewOrderModal" role="dialog" aria-modal="true" aria-labelledby="reviewOrderTitle">
       <section class="option-modal">

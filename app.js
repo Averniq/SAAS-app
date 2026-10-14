@@ -994,9 +994,15 @@ function tableIdFromUrl() {
 }
 
 const issuedQrUrls = new Map();
+let pendingQrExport = false;
+let qrIssuanceBusy = false;
+let qrSessionGeneration = 0;
 
 function clearIssuedQrSessionState() {
   issuedQrUrls.clear();
+  qrSessionGeneration += 1;
+  pendingQrExport = false;
+  if (typeof document !== "undefined") document.getElementById("qrExportDialog")?.close();
   publicQrTokenMetadataAvailability = "unavailable";
 }
 
@@ -1025,7 +1031,7 @@ function qrCardStatus(table) {
       : "QR administration is available to owners and managers only.";
   }
   if (issuedQrUrl(table)) return "QR ready for this session.";
-  if (hasUnrecoverablePublicQrToken(table)) return "An active QR/link exists, but its plaintext is not recoverable after reload.";
+  if (hasUnrecoverablePublicQrToken(table)) return "An active QR exists. Reprint from your saved QR package. If it is missing, contact your administrator before rotating.";
   return "Generate a customer QR when you are ready.";
 }
 
@@ -1034,13 +1040,68 @@ function qrCardActionLabel(table) {
 }
 
 async function issueQrForTable(table, { rotate = false } = {}) {
+  if (pendingQrExport || qrIssuanceBusy) throw new Error("Save the pending QR package before issuing another code.");
   if (!canManagePublicQrTokens()) throw new Error("QR token management is unavailable for this role or while QR metadata is unavailable.");
   if (!table?.cloudId || !staffUser?.restaurantId || !window.TableOrderCloud?.issuePublicQrTableToken) throw new Error("A cloud-connected owner or manager session is required to generate a QR code.");
   if (rotate && !window.confirm("Regenerate this QR? The previous customer QR/link will stop working.")) return "";
-  const result = await window.TableOrderCloud.issuePublicQrTableToken(staffUser.restaurantId, table.cloudId, null);
-  const url = orderingTokenUrl(result.token);
-  issuedQrUrls.set(table.id, url);
-  return url;
+  qrIssuanceBusy = true;
+  const generation = qrSessionGeneration;
+  const restaurantId = staffUser.restaurantId;
+  try {
+    const result = await window.TableOrderCloud.issuePublicQrTableToken(restaurantId, table.cloudId, null);
+    if (generation !== qrSessionGeneration || restaurantId !== staffUser?.restaurantId || !canManagePublicQrTokens()) {
+      throw new Error("The QR issuance session changed. Check table status before issuing another code.");
+    }
+    const url = orderingTokenUrl(result.token);
+    issuedQrUrls.set(table.id, url);
+    pendingQrExport = true;
+    const dialog = document.getElementById("qrExportDialog");
+    document.getElementById("confirmQrSaved").disabled = true;
+    document.getElementById("qrExportSummary").textContent = `${issuedQrUrls.size} of ${allTables().length} tables are available in this session. This package contains only those available codes.`;
+    dialog.showModal();
+    document.getElementById("saveQrPackage").focus();
+    return url;
+  } finally { qrIssuanceBusy = false; }
+}
+
+function canExportIssuedQr() {
+  return Boolean(staffUser?.restaurantId && ["owner", "manager"].includes(staffUser.role));
+}
+
+function qrTablesForExport(allowPartial = false) {
+  if (!canExportIssuedQr()) throw new Error("QR export is available to an authorized owner or manager only.");
+  const tables = allTables();
+  const available = tables.filter(table => issuedQrUrl(table));
+  if (!available.length || (!allowPartial && available.length !== tables.length)) {
+    throw new Error("Use your saved QR package to reprint. All table links must be available for a complete export; existing codes have not been changed.");
+  }
+  return available;
+}
+
+function qrCanvasForTable(table) {
+  if (!issuedQrUrl(table)) throw new Error("The original QR link is unavailable. Use your saved QR package.");
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 640;
+  drawQrCanvas(canvas, issuedQrUrl(table));
+  return canvas;
+}
+
+function downloadQrPackage({ allowPartial = false } = {}) {
+  try {
+    const tables = qrTablesForExport(allowPartial);
+    const cards = tables.map(table => {
+      const canvas = qrCanvasForTable(table);
+      return `<article><h2>${escapeHtml(table.name)}</h2><img src="${canvas.toDataURL("image/png")}" alt="QR for ${escapeHtml(table.name)}"><p><a href="${escapeHtml(issuedQrUrl(table))}">${escapeHtml(issuedQrUrl(table))}</a></p></article>`;
+    }).join("");
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(restaurant().name)} - QR package</title><style>body{font:16px system-ui;max-width:1000px;margin:24px auto;padding:20px}article{break-inside:avoid;border:1px solid #ddd;padding:24px;margin:20px 0;text-align:center}img{width:220px;height:220px}a{overflow-wrap:anywhere}@media print{article{page-break-inside:avoid}}</style></head><body><h1>${escapeHtml(restaurant().name)} - QR package</h1><p>${tables.length} of ${allTables().length} table codes. ${tables.length === allTables().length ? "Complete package." : "Partial package: other tables are not included."}</p><p>Keep this file securely. Open it offline and use your browser Print to reprint these QR cards. Links stay valid until explicitly rotated or revoked.</p>${cards}</body></html>`;
+    const href = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `${(restaurant().slug || "restaurant").replace(/[^a-z0-9-]/gi, "-")}-qr-package-${tables.length}-tables.html`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(href), 10000);
+    return true;
+  } catch (error) { showOrderToast(error.message, "warning"); return false; }
 }
 
 const qrMath = (() => {
@@ -1681,6 +1742,7 @@ async function handleStaffLogin(event) {
 }
 
 async function handleStaffLogout() {
+  if ((pendingQrExport || qrIssuanceBusy) && !window.confirm("Leave before saving your QR package? Unsaved original links cannot be retrieved after leaving this session.")) return;
   stopCloudOrderSync();
   clearIssuedQrSessionState();
   await window.TableOrderCloud.signOut().catch(() => {});
@@ -2838,7 +2900,7 @@ function renderSetup() {
           <div class="qr-actions">
             <button class="ghost-button" data-generate-qr-table="${table.id}" ${canManagePublicQrTokens() ? "" : "disabled"}>${qrCardActionLabel(table)}</button>
             <button class="ghost-button" data-copy-qr-table="${table.id}" ${issuedQrUrl(table) ? "" : "disabled"}>Copy Link</button>
-            <button class="ghost-button" data-download-qr="${table.id}">PNG</button>
+            <button class="ghost-button" data-download-qr="${table.id}" ${issuedQrUrl(table) ? "" : "disabled"}>PNG</button>
           </div>
         </article>
       `;
@@ -2980,7 +3042,7 @@ function renderTableAdmin() {
         <div class="table-admin-row">
           <div>
             <strong>${escapeHtml(table.name)}</strong>
-            <p class="muted">${issuedQrUrl(table) ? "Current token QR is available in this session." : hasUnrecoverablePublicQrToken(table) ? "An active QR/link exists, but its plaintext is not recoverable after reload." : "No QR generated in this session."}</p>
+            <p class="muted">${issuedQrUrl(table) ? "Current token QR is available in this session." : hasUnrecoverablePublicQrToken(table) ? "An active QR exists. Reprint from your saved QR package. If it is missing, contact your administrator before rotating." : "No QR generated in this session."}</p>
           </div>
           <span class="status-buttons">
             <button class="ghost-button" data-copy-table="${table.id}">Copy</button>
@@ -3026,8 +3088,8 @@ function renderQrCanvases() {
 
 function downloadQrPng(tableId) {
   const table = allTables().find((entry) => entry.id === tableId);
-  const canvas = [...document.querySelectorAll("[data-qr-table]")].find((entry) => entry.dataset.qrTable === tableId);
-  if (!table || !canvas) return;
+  if (!table || !issuedQrUrl(table) || !canExportIssuedQr()) return;
+  const canvas = qrCanvasForTable(table);
 
   const link = document.createElement("a");
   link.download = `${table.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "table"}-qr.png`;
@@ -3036,6 +3098,7 @@ function downloadQrPng(tableId) {
 }
 
 function downloadAllQrCodes() {
+  try { qrTablesForExport(); } catch (error) { showOrderToast(error.message, "warning"); return; }
   renderQrCanvases();
   const tables = allTables();
   if (!tables.length) return;
@@ -3050,8 +3113,7 @@ function downloadAllQrCodes() {
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.textAlign = "center";
   tables.forEach((table, index) => {
-    const source = [...document.querySelectorAll("[data-qr-table]")].find((entry) => entry.dataset.qrTable === table.id);
-    if (!source) return;
+    const source = qrCanvasForTable(table);
     const x = (index % columns) * cardWidth;
     const y = Math.floor(index / columns) * cardHeight;
     context.strokeStyle = "#ded4c7";
@@ -3087,11 +3149,12 @@ function renderQrPrintCard(table, qrDataUrl) {
 }
 
 function printQrSheet() {
+  try { qrTablesForExport(); } catch (error) { showOrderToast(error.message, "warning"); return; }
   renderQrCanvases();
   const cards = allTables()
     .map((table) => {
-      const canvas = [...document.querySelectorAll("[data-qr-table]")].find((entry) => entry.dataset.qrTable === table.id);
-      return canvas ? renderQrPrintCard(table, canvas.toDataURL("image/png")) : "";
+      const canvas = qrCanvasForTable(table);
+      return renderQrPrintCard(table, canvas.toDataURL("image/png"));
     })
     .join("");
 
@@ -4768,6 +4831,21 @@ async function initializeAccountFlow() {
 }
 
 function bindGlobalActions() {
+  document.getElementById("qrExportDialog").addEventListener("cancel", event => event.preventDefault());
+  document.getElementById("saveQrPackage").addEventListener("click", () => {
+    if (downloadQrPackage({ allowPartial: true })) document.getElementById("confirmQrSaved").disabled = false;
+  });
+  document.getElementById("confirmQrSaved").addEventListener("click", () => {
+    if (document.getElementById("confirmQrSaved").disabled) return;
+    pendingQrExport = false;
+    document.getElementById("qrExportDialog").close();
+  });
+  document.getElementById("downloadQrPackage").addEventListener("click", () => downloadQrPackage());
+  window.addEventListener("beforeunload", event => {
+    if (!pendingQrExport && !qrIssuanceBusy) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
   document.getElementById("passwordRecoveryForm").addEventListener("submit", handlePasswordRecovery);
   document.getElementById("passwordRecoveryRetry").addEventListener("click", event => {
     if (APP_ROUTE.area === "forgot-password" && (passwordRecoveryRequestPending || window.TableOrderCloud.getPasswordRecoveryCooldown())) event.preventDefault();
