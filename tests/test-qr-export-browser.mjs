@@ -54,7 +54,7 @@ try {
  await send('Runtime.enable');await send('Page.enable');await send('Network.enable');await send('Network.setBlockedURLs',{urls:['https://*']});
  for(const width of [375,768,1280]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width===375});await send('Page.navigate',{url:origin+'/'});await waitFor('document.readyState==="complete"','markup load');
-  await evaluate("window.testBlobs=[];const originalBlobUrl=URL.createObjectURL.bind(URL);URL.createObjectURL=blob=>{testBlobs.push(blob);return originalBlobUrl(blob)};window.testTables=[{id:'t1',cloudId:'c1',name:'Table One',hasActivePublicQrToken:true},{id:'t2',cloudId:'c2',name:'Table Two',hasActivePublicQrToken:true}];window.testDownloads=[];window.testIssues=0;window.testPrints=0;window.staffUser={role:'owner',restaurantId:'r1'};window.publicQrTokenMetadataAvailability='available';window.allTables=()=>testTables;window.restaurant=()=>({name:'Test Restaurant',slug:'test-restaurant'});window.showOrderToast=()=>{};window.escapeHtml=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;');window.renderQrCanvases=()=>{};window.drawQrCanvas=(canvas)=>{canvas.width=240;canvas.height=240;const ctx=canvas.getContext('2d');ctx.fillStyle='black';ctx.fillRect(10,10,200,200)};window.fullLogoFor=()=>'';window.setPrintContent=()=>{testPrints++};window.printPreparedContent=()=>{};window.TableOrderCloud={issuePublicQrTableToken:async()=>{testIssues++;return {token:'synthetic-public-token'}}};HTMLAnchorElement.prototype.click=function(){testDownloads.push({download:this.download,href:this.href})};");
+  await evaluate("window.testBlobs=[];const originalBlobUrl=URL.createObjectURL.bind(URL);URL.createObjectURL=blob=>{testBlobs.push(blob);return originalBlobUrl(blob)};window.testTables=[{id:'t1',cloudId:'c1',name:'Table One',hasActivePublicQrToken:true},{id:'t2',cloudId:'c2',name:'Table Two',hasActivePublicQrToken:true}];window.testDownloads=[];window.testIssues=0;window.testPrints=0;window.staffUser={id:'synthetic-owner',role:'owner',restaurantId:'r1'};window.publicQrTokenMetadataAvailability='available';window.allTables=()=>testTables;window.restaurant=()=>({name:'Test Restaurant',slug:'test-restaurant'});window.showOrderToast=()=>{};window.escapeHtml=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('\"','&quot;');window.renderQrCanvases=()=>{};window.drawQrCanvas=(canvas)=>{canvas.width=240;canvas.height=240;const ctx=canvas.getContext('2d');ctx.fillStyle='black';ctx.fillRect(10,10,200,200)};window.fullLogoFor=()=>'';window.setPrintContent=()=>{testPrints++};window.printPreparedContent=()=>{};window.TableOrderCloud={issuePublicQrTableToken:async(restaurantId,tableId)=>{testIssues++;return {token:'synthetic-public-token',restaurant_id:restaurantId,table_id:tableId}}};HTMLAnchorElement.prototype.click=function(){testDownloads.push({download:this.download,href:this.href})};");
   await evaluate(qrVendor+'\n'+qrDraw+'\n'+actual+'\n'+bindings);
   await evaluate('downloadQrPng("t1");downloadAllQrCodes();printQrSheet()');assert.equal(await evaluate('testDownloads.length+testPrints'),0,'Missing originals block blank exports');
   await evaluate('issueQrForTable(testTables[0])');
@@ -72,7 +72,38 @@ try {
   await evaluate('document.getElementById("confirmQrSaved").click()');assert.equal(await evaluate('pendingQrExport'),false,'Acknowledgment releases pending state');assert.equal(await evaluate('document.getElementById("qrExportDialog").open'),false,'Acknowledgment closes dialog');
   assert.equal(await evaluate('(()=>{const event=new Event("beforeunload",{cancelable:true});window.dispatchEvent(event);return event.defaultPrevented})()'),false,'Acknowledged export no longer warns');
   await evaluate('issueQrForTable(testTables[1])');assert.equal(await evaluate('testIssues'),2,'Next table issuance is allowed after acknowledgment');assert.equal(await evaluate('document.getElementById("confirmQrSaved").disabled'),true,'Each new issuance needs fresh save');
-  console.log('PASS mandatory QR export dialog, incomplete-export guards and layout at '+width+'px');
+  // Reproduce the live P1 in real Chrome: the server response succeeds, then
+  // metadata becomes unavailable before the awaiting client can reconcile it.
+  // All bearer material is synthetic and no external endpoint is reachable.
+  for (const role of ['owner', 'manager']) {
+   for (const rotate of [false, true]) {
+    await evaluate(`clearIssuedQrSessionState();staffUser={id:'synthetic-${role}',role:'${role}',restaurantId:'r1'};publicQrTokenMetadataAvailability='available';window.confirm=()=>true;window.resolveIssue=null;window.TableOrderCloud.issuePublicQrTableToken=(restaurantId,tableId)=>{testIssues++;return new Promise(resolve=>{window.resolveIssue=()=>resolve({token:'synthetic-race-token',restaurant_id:restaurantId,table_id:tableId})})};window.pendingIssue=issueQrForTable(testTables[0],{rotate:${rotate}});void 0`);
+    await evaluate('window.duplicateIssue=issueQrForTable(testTables[0]).then(()=>false,()=>true)');
+    assert.equal(await evaluate('duplicateIssue'),true,'Duplicate in-flight issuance remains blocked');
+    await evaluate('resolveIssue();publicQrTokenMetadataAvailability="unavailable"');
+    assert.match(await evaluate('pendingIssue'),/\/order\/synthetic-race-token$/,'Successful response survives metadata outage before reconciliation');
+    assert.equal(await evaluate('issuedQrUrls.size'),1,'Successful response remains retained');
+    assert.equal(await evaluate('pendingQrExport && document.getElementById("qrExportDialog").open'),true,'Retention step opens despite metadata outage');
+    await evaluate('window.unacknowledgedIssue=issueQrForTable(testTables[1]).then(()=>false,()=>true)');
+    assert.equal(await evaluate('unacknowledgedIssue'),true,'Another issuance cannot proceed before acknowledgment');
+    const beforeDownloads=await evaluate('testDownloads.length');
+    await evaluate('document.getElementById("saveQrPackage").click()');
+    assert.equal(await evaluate('testDownloads.length'),beforeDownloads+1,'Operator downloads retained successful response during metadata outage');
+    assert.match(await evaluate('testBlobs.at(-1).text()'),/synthetic-race-token/,'Offline package includes synthetic original');
+    assert.equal(await evaluate('document.getElementById("confirmQrSaved").disabled'),false,'Outage does not prevent acknowledgment');
+    await evaluate('document.getElementById("confirmQrSaved").click()');
+    assert.equal(await evaluate('pendingQrExport'),false,'Successful response is acknowledged');
+    assert.equal(await evaluate('issuedQrUrls.size'),1,'Acknowledgment retains original for reprint');
+   }
+  }
+  // Changing identity, tenant, role or session fence still discards a response.
+  for (const changedState of ['staffUser.id="foreign-owner"', 'staffUser.restaurantId="foreign-restaurant"', 'staffUser.role="staff"', 'clearIssuedQrSessionState()']) {
+   await evaluate(`clearIssuedQrSessionState();staffUser={id:'synthetic-owner',role:'owner',restaurantId:'r1'};publicQrTokenMetadataAvailability='available';window.pendingIssue=issueQrForTable(testTables[0]).then(()=>false,()=>true);${changedState};resolveIssue()`);
+   assert.equal(await evaluate('pendingIssue'),true,'Changed authority rejects pending response');
+   assert.equal(await evaluate('issuedQrUrls.size'),0,'Changed authority retains no foreign material');
+   assert.equal(await evaluate('pendingQrExport || document.getElementById("qrExportDialog").open'),false,'Rejected response opens no retention flow');
+  }
+  console.log('PASS mandatory QR export, owner/manager issuance and rotation metadata race, stale-authority rejection and layout at '+width+'px');
  }
  assert.deepEqual(exceptions,[],'No uncaught browser exceptions');
 } finally {

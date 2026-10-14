@@ -1042,18 +1042,27 @@ function qrCardActionLabel(table) {
 async function issueQrForTable(table, { rotate = false } = {}) {
   if (pendingQrExport || qrIssuanceBusy) throw new Error("Save the pending QR package before issuing another code.");
   if (!canManagePublicQrTokens()) throw new Error("QR token management is unavailable for this role or while QR metadata is unavailable.");
-  if (!table?.cloudId || !staffUser?.restaurantId || !window.TableOrderCloud?.issuePublicQrTableToken) throw new Error("A cloud-connected owner or manager session is required to generate a QR code.");
+  if (!table?.cloudId || !staffUser?.id || !staffUser?.restaurantId || !window.TableOrderCloud?.issuePublicQrTableToken) throw new Error("A cloud-connected owner or manager session is required to generate a QR code.");
   if (rotate && !window.confirm("Regenerate this QR? The previous customer QR/link will stop working.")) return "";
   qrIssuanceBusy = true;
   const generation = qrSessionGeneration;
   const restaurantId = staffUser.restaurantId;
+  const userId = staffUser.id;
+  const tableId = table.cloudId;
+  const localTableId = table.id;
   try {
-    const result = await window.TableOrderCloud.issuePublicQrTableToken(restaurantId, table.cloudId, null);
-    if (generation !== qrSessionGeneration || restaurantId !== staffUser?.restaurantId || !canManagePublicQrTokens()) {
+    const result = await window.TableOrderCloud.issuePublicQrTableToken(restaurantId, tableId, null);
+    // Metadata gates starting issuance, not retaining its successful response.
+    if (generation !== qrSessionGeneration || userId !== staffUser?.id
+        || restaurantId !== staffUser?.restaurantId || !canExportIssuedQr()) {
       throw new Error("The QR issuance session changed. Check table status before issuing another code.");
     }
+    if (result?.restaurant_id !== restaurantId || result?.table_id !== tableId
+        || typeof result?.token !== "string" || !result.token) {
+      throw new Error("The QR issuance response did not match this request. Check table status before issuing another code.");
+    }
     const url = orderingTokenUrl(result.token);
-    issuedQrUrls.set(table.id, url);
+    issuedQrUrls.set(localTableId, url);
     pendingQrExport = true;
     const dialog = document.getElementById("qrExportDialog");
     document.getElementById("confirmQrSaved").disabled = true;
