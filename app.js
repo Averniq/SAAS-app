@@ -4,6 +4,7 @@ const PUBLIC_ORDER_DRAFT_STORAGE_PREFIX = "aveniq-public-order:";
 const SOUND_STORAGE_KEY = "tableorder-kitchen-sound";
 const STYLE_VERSION = "sake-street-brand-assets-v1";
 const MENU_VERSION = "aveniq-sample-menu-v1";
+function isUnscopedAccountEntry(route = APP_ROUTE) { return ["app", "login"].includes(route.area); }
 function isAuthenticatedDashboardRoute() { return ["dashboard", "kitchen", "frontdesk", "reports", "setup"].includes(APP_ROUTE.area); }
 
 const DEFAULT_LOGO_SVG = `
@@ -4238,15 +4239,16 @@ function setOwnerAuthMode() {
 function setOwnerFlowError(message = "", target = "ownerAuthError") {
   const node = document.getElementById(target);
   if (!node) return;
-  node.textContent = message;
-  node.classList.toggle("hidden", !message);
+  const friendly = /TENANT_SELECTION_REQUIRED/.test(message) ? "Choose a restaurant to continue." : message;
+  node.textContent = friendly;
+  node.classList.toggle("hidden", !friendly);
 }
 
 function renderMobileCustomerControls(entries = cartEntries()) {
   const dock = document.getElementById("mobileCartDock");
   const nav = document.getElementById("mobileBottomNav");
   if (!dock || !nav) return;
-  const isCustomer = !staffUser && activeView === "customer" && !["forgot-password", "reset-password"].includes(APP_ROUTE.area);
+  const isCustomer = !staffUser && activeView === "customer" && !["app", "login", "forgot-password", "reset-password"].includes(APP_ROUTE.area);
   const quantity = entries.reduce((sum, entry) => sum + Number(entry.quantity || 0), 0);
   dock.classList.toggle("hidden", !isCustomer || !quantity);
   nav.classList.toggle("hidden", !isCustomer);
@@ -4257,6 +4259,7 @@ function renderMobileCustomerControls(entries = cartEntries()) {
 
 function showOwnerAuth() {
   setGatewayVisible(true);
+  document.getElementById("restaurantSelectionPanel").classList.add("hidden");
   document.getElementById("ownerAuthPanel").classList.remove("hidden");
   document.getElementById("inviteAuthPanel").classList.add("hidden");
   document.getElementById("onboardingWizard").classList.add("hidden");
@@ -4266,6 +4269,7 @@ function showOwnerAuth() {
 
 function showOnboarding(step = 1) {
   setGatewayVisible(true);
+  document.getElementById("restaurantSelectionPanel").classList.add("hidden");
   document.getElementById("ownerAuthPanel").classList.add("hidden");
   document.getElementById("inviteAuthPanel").classList.add("hidden");
   document.getElementById("platformConsole").classList.add("hidden");
@@ -4282,6 +4286,7 @@ function setInviteAuthError(message = "", success = false) {
 
 function showInviteAuth(message = "") {
   setGatewayVisible(true);
+  document.getElementById("restaurantSelectionPanel").classList.add("hidden");
   document.getElementById("ownerAuthPanel").classList.add("hidden");
   document.getElementById("platformConsole").classList.add("hidden");
   document.getElementById("onboardingWizard").classList.add("hidden");
@@ -4361,6 +4366,27 @@ async function handleOwnerAuth(event) {
   } finally { button.disabled = false; }
 }
 
+function showRestaurantSelector(memberships) {
+  setGatewayVisible(true);
+  for (const id of ["ownerAuthPanel", "inviteAuthPanel", "onboardingWizard", "platformConsole", "passwordRecoveryPanel"]) {
+    document.getElementById(id).classList.add("hidden");
+  }
+  const panel = document.getElementById("restaurantSelectionPanel");
+  const list = document.getElementById("restaurantSelectionList");
+  list.replaceChildren();
+  for (const membership of memberships) {
+    const restaurant = Array.isArray(membership.restaurants) ? membership.restaurants[0] : membership.restaurants;
+    if (!restaurant?.slug) continue;
+    const link = document.createElement("a");
+    link.className = "ghost-button";
+    link.href = `/dashboard/${encodeURIComponent(restaurant.slug)}/dashboard`;
+    link.textContent = restaurant.name || "Restaurant";
+    list.appendChild(link);
+  }
+  panel.classList.remove("hidden");
+  document.getElementById("restaurantSelectionTitle").focus();
+}
+
 async function continueOwnerSession() {
   try {
     clearIssuedQrSessionState();
@@ -4387,6 +4413,22 @@ async function continueOwnerSession() {
     const master = await window.TableOrderCloud.getPlatformProfile();
     if (master) {
       await showPlatformConsole(master);
+      return;
+    }
+    if (isUnscopedAccountEntry(route)) {
+      const memberships = await window.TableOrderCloud.getMemberships();
+      if (!memberships.length) {
+        const error = new Error("ONBOARDING_REQUIRED");
+        error.code = "ONBOARDING_REQUIRED";
+        throw error;
+      }
+      if (memberships.length > 1) {
+        showRestaurantSelector(memberships);
+        return;
+      }
+      const restaurant = Array.isArray(memberships[0].restaurants) ? memberships[0].restaurants[0] : memberships[0].restaurants;
+      if (!restaurant?.slug) throw new Error("Restaurant access is unavailable. Please contact your administrator.");
+      window.location.href = `/dashboard/${encodeURIComponent(restaurant.slug)}/dashboard`;
       return;
     }
     const profile = await window.TableOrderCloud.getStaffProfile();
@@ -4455,6 +4497,7 @@ async function loadPlatformRestaurants() {
 async function showPlatformConsole(master) {
   platformUser = master;
   setGatewayVisible(true);
+  document.getElementById("restaurantSelectionPanel").classList.add("hidden");
   document.getElementById("ownerAuthPanel").classList.add("hidden");
   document.getElementById("inviteAuthPanel").classList.add("hidden");
   document.getElementById("onboardingWizard").classList.add("hidden");
@@ -4617,6 +4660,7 @@ function refreshPasswordRecoveryCooldown() {
 
 async function showPasswordRecovery(reset = false) {
   setGatewayVisible(true);
+  document.getElementById("restaurantSelectionPanel").classList.add("hidden");
   ["ownerAuthPanel", "inviteAuthPanel", "onboardingWizard", "platformConsole"].forEach(id => document.getElementById(id).classList.add("hidden"));
   document.getElementById("passwordRecoveryPanel").classList.remove("hidden");
   document.getElementById("passwordRecoveryEmailField").classList.toggle("hidden", reset);
@@ -4916,15 +4960,16 @@ function render() {
 renderTabs();
 bindGlobalActions();
 render();
-if (!["forgot-password", "reset-password"].includes(APP_ROUTE.area)) {
+if (!isUnscopedAccountEntry() && !["forgot-password", "reset-password"].includes(APP_ROUTE.area)) {
 checkDatabaseConnection();
 if (APP_ROUTE.area !== "legacy-order" && !isAuthenticatedDashboardRoute()) loadCloudDataIntoApp({ silent: true });
 initializeStaffAuth();
 }
 initializeAccountFlow();
-startCustomerOrderStatusSync();
+if (!isUnscopedAccountEntry()) startCustomerOrderStatusSync();
 
 document.addEventListener("visibilitychange", () => {
+  if (isUnscopedAccountEntry()) return;
   if (!document.hidden && staffUser) syncCloudOrders({ notify: false });
   if (!document.hidden && !staffUser) syncCustomerOrderStatuses();
 });

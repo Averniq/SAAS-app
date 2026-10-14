@@ -14,12 +14,14 @@
     if (parts[0] === "dashboard" && parts[1]) return { area: parts[2] || "dashboard", restaurantSlug: parts[1], tableRef: "" };
     if (parts[0] === "r" && parts[1]) return { area: "restaurant", restaurantSlug: parts[1], tableRef: params.get("table") || "" };
     if (parts[0] === "join" && parts[1]) return { area: "join", restaurantSlug: "", tableRef: "", inviteToken: parts[1] };
-    if (["signup", "login", "forgot-password", "reset-password", "onboarding", "platform"].includes(parts[0])) return { area: parts[0], restaurantSlug: params.get("restaurant") || "", tableRef: "" };
-    return { area: "app", restaurantSlug: params.get("restaurant") || config.restaurantSlug || "demo", tableRef: params.get("table") || params.get("token") || "" };
+    if (parts[0] === "login") return { area: "login", restaurantSlug: "", tableRef: "" };
+    if (["signup", "forgot-password", "reset-password", "onboarding", "platform"].includes(parts[0])) return { area: parts[0], restaurantSlug: params.get("restaurant") || "", tableRef: "" };
+    return { area: "app", restaurantSlug: "", tableRef: params.get("table") || params.get("token") || "" };
   }
 
   function restaurantSlug() {
-    return routeContext().restaurantSlug || activeMembership?.restaurantSlug || config.restaurantSlug || "demo";
+    const selected = routeContext().restaurantSlug || activeMembership?.restaurantSlug || activePlatformDashboard?.restaurantSlug;
+    return selected || (activeAccessToken() ? "" : config.restaurantSlug || "demo");
   }
 
   function readStoredSession() {

@@ -15,7 +15,9 @@
     "mobile:android": "pnpm run build && cap sync android && cap open android",
     "mobile:ios": "pnpm run build && cap sync ios && cap open ios",
     "test:password-recovery": "node ./tests/test-password-recovery.mjs && node ./tests/test-recovery-resend.mjs && node ./tests/test-password-recovery-ui.mjs",
-    "test:password-recovery:browser": "node ./tests/test-password-recovery-browser.mjs"
+    "test:password-recovery:browser": "node ./tests/test-password-recovery-browser.mjs",
+    "test:tenant-routing": "node ./tests/test-app-host-membership-routing.mjs",
+    "test:tenant-routing:browser": "node ./tests/test-tenant-routing-browser.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.1",
