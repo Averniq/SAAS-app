@@ -31,7 +31,7 @@ function harness({path='/', search='', memberships=[member('sake-street')], admi
     clearIssuedQrSessionState(){events.push(['clear']);},beginPaymentFinancialSession(){events.push(['financial']);},
     showPlatformConsole(master){events.push(['platform',master]);},showRestaurantSelector(entries){events.push(['selector',entries]);},
     setGatewayVisible(value){events.push(['gateway',value]);},loadCloudDataIntoApp(){events.push(['tenant-data']);},checkDatabaseConnection(){events.push(['connection']);},
-    renderStaffSession(){events.push(['staff']);},startCloudOrderSync(){events.push(['sync']);},setView(area){events.push(['view',area]);},
+    renderStaffSession(){events.push(['staff']);},startCloudOrderSync(){events.push(['sync']);},setView(area){events.push(['view',area]);return true;},
     showOwnerAuth(){events.push(['login']);},setOwnerFlowError(message){events.push(['error',message]);}
   });
   vm.runInContext(cloudSource,context);
@@ -90,13 +90,13 @@ console.log('Behavioral app-host membership routing regression: PASS (root/login
 // Execute the real startup statements, with network entry points observed rather than invoked.
 const startup = appSource.slice(appSource.lastIndexOf('\nrenderTabs();'));
 const routeHelpers = appSource.slice(0, appSource.indexOf('\nconst DEFAULT_LOGO_SVG'));
-for(const path of ['/', '/login']) {
+for(const path of ['/', '/login', '/dashboard/sake-street/dashboard', '/dashboard/sake-street/kitchen', '/dashboard/sake-street/frontdesk', '/dashboard/sake-street/reports']) {
   const h=harness({path,memberships:[member('sake-street'),member('other-tenant')]});
   const observed=[];
   const context={window:h.window,document:{addEventListener(){}},staffUser:null,
     renderTabs(){},bindGlobalActions(){},render(){},
     checkDatabaseConnection(){observed.push('connection');},loadCloudDataIntoApp(){observed.push('tenant-data');},
-    initializeStaffAuth(){observed.push('staff-auth');},initializeAccountFlow(){observed.push('account-flow');},
+    initializeStaffAuth(){observed.push('staff-auth');},initializeAccountFlow(){observed.push('account-flow');return Promise.resolve();},
     startCustomerOrderStatusSync(){observed.push('customer-sync');}
   };
   vm.runInNewContext(routeHelpers+'\n'+startup,context);

@@ -14,7 +14,12 @@
     <link id="tenantAppleTouchIcon" rel="apple-touch-icon" href="/assets/brand/sake-street-logo-mark.png" />
     <link rel="stylesheet" href="/styles.css?v=20260911-1" />
   </head>
-  <body>
+  <body class="startup-pending" aria-busy="true">
+    <section class="startup-loading" id="startupLoading" role="status" aria-live="polite">
+      <div class="gateway-brand"><span class="gateway-mark">A</span><strong>Aveniq</strong></div>
+      <p>Loading Aveniq...</p>
+      <noscript>Enable JavaScript to continue.</noscript>
+    </section>
     <section class="account-gateway hidden" id="accountGateway" aria-live="polite">
       <div class="gateway-brand">
         <span class="gateway-mark">A</span>

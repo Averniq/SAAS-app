@@ -17,7 +17,8 @@
     "test:password-recovery": "node ./tests/test-password-recovery.mjs && node ./tests/test-recovery-resend.mjs && node ./tests/test-password-recovery-ui.mjs",
     "test:password-recovery:browser": "node ./tests/test-password-recovery-browser.mjs",
     "test:tenant-routing": "node ./tests/test-app-host-membership-routing.mjs",
-    "test:tenant-routing:browser": "node ./tests/test-tenant-routing-browser.mjs"
+    "test:tenant-routing:browser": "node ./tests/test-tenant-routing-browser.mjs",
+    "test:startup:browser": "node ./tests/test-startup-shell-browser.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.1",
