@@ -898,3 +898,10 @@ body.account-flow-active > .app-header, body.account-flow-active > .tabs, body.a
 @media (min-width: 641px) and (max-width: 900px) {
   .platform-layout { grid-template-columns: 1fr; }
 }
+
+/* Keep the default customer shell out of first paint and account startup. */
+.startup-loading { display: none; }
+body.startup-pending > :not(#startupLoading) { display: none !important; }
+body.startup-pending > .startup-loading { min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 24px; background: #fafafa; color: #211b18; }
+.startup-loading .gateway-brand { margin: 0; }
+.startup-loading p { margin-top: 20px; color: #69645e; }

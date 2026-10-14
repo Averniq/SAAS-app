@@ -4223,9 +4223,15 @@ let platformRestaurants = [];
 let inviteAuthMode = "signup";
 let restaurantTeamData = { staff: [], invites: [] };
 
+function finishStartup() {
+  document.body.classList.remove("startup-pending");
+  document.body.removeAttribute("aria-busy");
+}
+
 function setGatewayVisible(visible) {
   document.getElementById("accountGateway")?.classList.toggle("hidden", !visible);
   document.body.classList.toggle("account-flow-active", Boolean(visible));
+  finishStartup();
 }
 
 function setOwnerAuthMode() {
@@ -4401,12 +4407,14 @@ async function continueOwnerSession() {
       staffUser = profile;
       beginPaymentFinancialSession(profile);
       onboardingRestaurant = { id: profile.restaurantId, slug: profile.restaurantSlug, name: profile.restaurantName };
-      setGatewayVisible(false);
       await loadCloudDataIntoApp({ silent: true });
       await checkDatabaseConnection();
       renderStaffSession();
       startCloudOrderSync();
-      setView(route.area === "dashboard" ? "setup" : route.area, { updateUrl: false });
+      if (!setView(route.area === "dashboard" ? "setup" : route.area, { updateUrl: false })) {
+        throw new Error("This account does not have access to this screen.");
+      }
+      setGatewayVisible(false);
       return;
     }
 
@@ -4960,16 +4968,23 @@ function render() {
 renderTabs();
 bindGlobalActions();
 render();
-if (!isUnscopedAccountEntry() && !["forgot-password", "reset-password"].includes(APP_ROUTE.area)) {
-checkDatabaseConnection();
-if (APP_ROUTE.area !== "legacy-order" && !isAuthenticatedDashboardRoute()) loadCloudDataIntoApp({ silent: true });
-initializeStaffAuth();
+const isPublicEntry = ["order", "legacy-order", "restaurant"].includes(APP_ROUTE.area);
+if (isPublicEntry) {
+  checkDatabaseConnection();
+  if (APP_ROUTE.area !== "legacy-order") loadCloudDataIntoApp({ silent: true });
+  initializeStaffAuth();
+  initializeAccountFlow();
+  finishStartup();
+  startCustomerOrderStatusSync();
+} else {
+  initializeAccountFlow().catch((error) => {
+    showOwnerAuth();
+    setOwnerFlowError(error.message);
+  });
 }
-initializeAccountFlow();
-if (!isUnscopedAccountEntry()) startCustomerOrderStatusSync();
 
 document.addEventListener("visibilitychange", () => {
-  if (isUnscopedAccountEntry()) return;
+  if (!isPublicEntry && !staffUser) return;
   if (!document.hidden && staffUser) syncCloudOrders({ notify: false });
   if (!document.hidden && !staffUser) syncCustomerOrderStatuses();
 });

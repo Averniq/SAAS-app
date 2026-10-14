@@ -25,7 +25,7 @@ function page(storage = new Map(), restaurantId = 'tenant-a') {
     document: { getElementById: () => ({ value: '' }) },
     window: { clearInterval() {}, setInterval: () => 1, TableOrderCloud: { getPlatformProfile: async () => null, getStaffProfile: async () => profile, routeContext: () => ({ area: 'frontdesk', restaurantSlug: restaurantId }) } },
     render() {}, renderKitchen() {}, renderFrontDesk() {}, renderReports() {}, renderStaffSession() {},
-    setGatewayVisible() {}, checkDatabaseConnection: async () => {}, setView() {},
+    setGatewayVisible() {}, checkDatabaseConnection: async () => {}, setView() { return true; },
     setCloudSyncStatus() {}, cloudSyncSummary() {}, showKitchenNewOrderAlert() {}, showOrderToast() {},
     cloudOrderToLocal: o => ({ ...o }), console: { warn() {} }
   });
