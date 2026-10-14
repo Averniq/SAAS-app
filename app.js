@@ -4600,6 +4600,21 @@ function configureOnboardingSuccessLinks() {
   document.getElementById("openRestaurantDashboard").href = `/dashboard/${encodeURIComponent(slug)}/dashboard`;
 }
 
+let passwordRecoveryCooldownTimer = null;
+let passwordRecoveryRequestPending = false;
+
+function refreshPasswordRecoveryCooldown() {
+  if (APP_ROUTE.area !== "forgot-password") return;
+  const seconds = window.TableOrderCloud.getPasswordRecoveryCooldown();
+  const button = document.getElementById("passwordRecoverySubmit");
+  button.disabled = passwordRecoveryRequestPending || seconds > 0;
+  button.textContent = passwordRecoveryRequestPending ? "Sending…" : seconds > 0 ? `Send reset link in ${seconds}s` : "Send reset link";
+  const retry = document.getElementById("passwordRecoveryRetry");
+  retry.setAttribute("aria-disabled", String(seconds > 0 || passwordRecoveryRequestPending));
+  retry.tabIndex = seconds > 0 || passwordRecoveryRequestPending ? -1 : 0;
+  retry.textContent = seconds > 0 ? `Request another link in ${seconds}s` : "Request another reset link";
+}
+
 async function showPasswordRecovery(reset = false) {
   setGatewayVisible(true);
   ["ownerAuthPanel", "inviteAuthPanel", "onboardingWizard", "platformConsole"].forEach(id => document.getElementById(id).classList.add("hidden"));
@@ -4613,7 +4628,12 @@ async function showPasswordRecovery(reset = false) {
     document.getElementById("passwordRecovery" + id).required = reset;
   }
   const button = document.getElementById("passwordRecoverySubmit");
-  if (!reset) return;
+  if (!reset) {
+    document.getElementById("passwordRecoveryDescription").textContent = "Request a reset link, then open only the newest email in this browser. You can request another link after 60 seconds.";
+    refreshPasswordRecoveryCooldown();
+    if (!passwordRecoveryCooldownTimer) passwordRecoveryCooldownTimer = setInterval(refreshPasswordRecoveryCooldown, 1000);
+    return;
+  }
   document.getElementById("passwordRecoveryTitle").textContent = "Choose a new password";
   document.getElementById("passwordRecoveryDescription").textContent = "Checking your reset link…";
   button.textContent = "Update password";
@@ -4634,6 +4654,8 @@ async function handlePasswordRecovery(event) {
   const button = document.getElementById("passwordRecoverySubmit");
   if (button.disabled) return;
   const reset = APP_ROUTE.area === "reset-password";
+  if (!reset && window.TableOrderCloud.getPasswordRecoveryCooldown()) { refreshPasswordRecoveryCooldown(); return; }
+  if (!reset) passwordRecoveryRequestPending = true;
   button.disabled = true;
   button.textContent = reset ? "Updating…" : "Sending…";
   setOwnerFlowError("", "passwordRecoveryError");
@@ -4643,7 +4665,7 @@ async function handlePasswordRecovery(event) {
     document.getElementById("passwordRecoveryForm").reset();
     document.getElementById("passwordRecoveryForm").classList.add("hidden");
     const success = document.getElementById("passwordRecoverySuccess");
-    success.textContent = reset ? "Your password has been updated. Return to login to sign in." : "If an account is eligible, a reset link will be sent. Check your inbox and spam folder. If it does not arrive, try again in a few minutes.";
+    success.textContent = reset ? "Your password has been updated. Return to login to sign in." : "If an account is eligible, a reset link has been sent. Check your inbox and spam folder. Use only the newest email in this browser. If it does not arrive, try again after the countdown.";
     success.classList.remove("hidden");
     if (!reset) document.getElementById("passwordRecoveryRetry").classList.remove("hidden");
   } catch (error) {
@@ -4653,8 +4675,10 @@ async function handlePasswordRecovery(event) {
       document.getElementById("passwordRecoveryRetry").classList.remove("hidden");
     }
   } finally {
+    passwordRecoveryRequestPending = false;
     button.disabled = false;
     button.textContent = reset ? "Update password" : "Send reset link";
+    if (!reset) refreshPasswordRecoveryCooldown();
   }
 }
 
@@ -4701,6 +4725,9 @@ async function initializeAccountFlow() {
 
 function bindGlobalActions() {
   document.getElementById("passwordRecoveryForm").addEventListener("submit", handlePasswordRecovery);
+  document.getElementById("passwordRecoveryRetry").addEventListener("click", event => {
+    if (APP_ROUTE.area === "forgot-password" && (passwordRecoveryRequestPending || window.TableOrderCloud.getPasswordRecoveryCooldown())) event.preventDefault();
+  });
   document.getElementById("ownerAuthForm").addEventListener("submit", handleOwnerAuth);
   document.getElementById("inviteAuthForm").addEventListener("submit", handleInviteAuth);
   document.getElementById("toggleInviteAuthMode").addEventListener("click", () => updateInviteAuthMode(inviteAuthMode === "signup" ? "login" : "signup"));

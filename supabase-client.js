@@ -90,35 +90,65 @@
   let recoveryClient = null;
   let recoveryBusy = false;
   let recoveryMemory = null;
+  let recoveryRequestClient = null;
+  let recoveryRequestMemory = null;
+
+  const RECOVERY_LIFETIME = 3600000;
+  const RECOVERY_COOLDOWN = 60000;
+
+  function recoveryStorageKey() {
+    if (!config.url || !config.publishableKey || !window.AveniqRecoveryAuth?.AuthClient) throw new Error("Recovery configuration is missing.");
+    return "aveniq-password-recovery:" + new URL(config.url).host;
+  }
+
+  function readRecoveryVerifier() {
+    const key = recoveryStorageKey() + "-code-verifier";
+    try {
+      const entry = JSON.parse(window.localStorage.getItem(key) || "null");
+      const verifier = entry && JSON.parse(entry.value);
+      if (!entry || !Number.isFinite(entry.createdAt) || Date.now() - entry.createdAt >= RECOVERY_LIFETIME
+          || entry.createdAt > Date.now() || typeof verifier !== "string"
+          || !/^[A-Za-z0-9._~-]{43,128}\/PASSWORD_RECOVERY$/.test(verifier)) {
+        window.localStorage.removeItem(key);
+        window.localStorage.removeItem(key + "-resend-after");
+        return null;
+      }
+      return entry;
+    } catch { window.localStorage.removeItem(key); window.localStorage.removeItem(key + "-resend-after"); return null; }
+  }
+
+  function getPasswordRecoveryCooldown() {
+    readRecoveryVerifier();
+    const key = recoveryStorageKey() + "-code-verifier-resend-after";
+    const until = Number(window.localStorage.getItem(key));
+    if (!Number.isFinite(until) || until <= Date.now() || until > Date.now() + RECOVERY_COOLDOWN) {
+      window.localStorage.removeItem(key);
+      return 0;
+    }
+    return Math.ceil((until - Date.now()) / 1000);
+  }
+
+  async function withRecoveryLock(action, ifAvailable = false) {
+    // Web Locks coordinate requests, callback consumption and cleanup across tabs.
+    // Without an exclusive lock, fail closed rather than risk mismatched PKCE state.
+    if (!window.navigator?.locks?.request) return null;
+    return window.navigator.locks.request(recoveryStorageKey(), {mode: "exclusive", ifAvailable}, lock => lock ? action() : null);
+  }
 
   function getRecoveryClient() {
     if (recoveryClient) return recoveryClient;
-    if (!config.url || !config.publishableKey || !window.AveniqRecoveryAuth?.AuthClient) throw new Error("Recovery configuration is missing.");
-    const storageKey = "aveniq-password-recovery:" + new URL(config.url).host;
+    const storageKey = recoveryStorageKey();
     const verifierKey = storageKey + "-code-verifier";
-    // Only the PKCE verifier crosses page loads. Recovery credentials stay in memory
-    // and never share the normal login adapter's session storage.
+    // Only the bounded verifier crosses page loads; Auth credentials stay in memory.
     const memory = new Map();
     recoveryMemory = memory;
     const storage = {
-      getItem(key) {
-        if (key !== verifierKey) return memory.get(key) || null;
-        try {
-          const entry = JSON.parse(window.localStorage.getItem(key) || "null");
-          if (!entry || !Number.isFinite(entry.createdAt) || Date.now() - entry.createdAt > 3600000 || entry.createdAt > Date.now()) {
-            window.localStorage.removeItem(key);
-            return null;
-          }
-          return entry.value;
-        } catch { window.localStorage.removeItem(key); return null; }
-      },
-      setItem(key, value) {
-        if (key === verifierKey) window.localStorage.setItem(key, JSON.stringify({value, createdAt: Date.now()}));
-        else memory.set(key, value);
-      },
+      getItem: key => key === verifierKey ? readRecoveryVerifier()?.value || null : memory.get(key) || null,
+      setItem(key, value) { if (key !== verifierKey) memory.set(key, value); },
       removeItem(key) {
-        if (key === verifierKey) window.localStorage.removeItem(key);
-        else memory.delete(key);
+        // SDK one-time-code cleanup cannot erase the bounded resend verifier.
+        // Explicit recovery completion/failure clears it in endPasswordRecovery.
+        if (key !== verifierKey) memory.delete(key);
       }
     };
     recoveryClient = new window.AveniqRecoveryAuth.AuthClient({
@@ -131,19 +161,54 @@
 
   async function requestPasswordRecovery(email) {
     try {
-      await getRecoveryClient().resetPasswordForEmail(String(email || "").trim().toLowerCase(), {
-        redirectTo: "https://app.aveniq.com.au/reset-password"
-      });
+      await withRecoveryLock(async () => {
+        if (getPasswordRecoveryCooldown() || recoverySession || recoveryBusy) return;
+        const storageKey = recoveryStorageKey() + ":request";
+        const temporary = recoveryRequestMemory || (recoveryRequestMemory = new Map());
+        const client = recoveryRequestClient || (recoveryRequestClient = new window.AveniqRecoveryAuth.AuthClient({
+          url: config.url + "/auth/v1", headers: {apikey: config.publishableKey, Authorization: "Bearer " + config.publishableKey},
+          flowType: "pkce", storageKey, persistSession: true, autoRefreshToken: false, detectSessionInUrl: false,
+          storage: {getItem: key => temporary.get(key) || null, setItem: (key, value) => temporary.set(key, value), removeItem: key => temporary.delete(key)},
+          fetch: async (url, options) => {
+            if (new URL(url).pathname !== "/auth/v1/recover" || options.method !== "POST") throw new Error("Unexpected recovery request.");
+            let active = readRecoveryVerifier();
+            if (active === null) {
+              active = {value: temporary.get(storageKey + "-code-verifier"), createdAt: Date.now()};
+              window.localStorage.setItem(recoveryStorageKey() + "-code-verifier", JSON.stringify(active));
+              if (!readRecoveryVerifier()) throw new Error("Recovery verifier is unavailable.");
+            }
+            const verifier = JSON.parse(active.value).split("/")[0];
+            const digest = await window.crypto.subtle.digest("SHA-256", Uint8Array.from(verifier, char => char.charCodeAt(0)));
+            const challenge = window.btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+            const body = JSON.parse(options.body);
+            body.code_challenge = challenge;
+            body.code_challenge_method = "s256";
+            // Persist before dispatch: an ambiguous response may still have sent mail.
+            // Every resend uses this same challenge, including server-side flow state
+            // created before a rate-limit/provider failure. SDK cleanup is isolated.
+            window.localStorage.setItem(recoveryStorageKey() + "-code-verifier-resend-after", String(Date.now() + RECOVERY_COOLDOWN));
+            return fetch(url, {...options, body: JSON.stringify(body)});
+          }
+        }));
+        try {
+          await client.resetPasswordForEmail(String(email || "").trim().toLowerCase(), {redirectTo: "https://app.aveniq.com.au/reset-password"});
+        } finally { temporary.clear(); }
+      }, true);
     } catch {
-      // Keep the same response for every email and provider failure.
+      // Same neutral response for all addresses, provider failures and unavailable locks.
     }
+    return {retryAfter: getPasswordRecoveryCooldown()};
   }
 
   async function endPasswordRecovery() {
     recoverySession = null;
     try {
       if (recoveryClient) await recoveryClient.signOut({scope: "local"}).catch(() => {});
-    } finally { recoveryMemory?.clear(); }
+    } finally {
+      recoveryMemory?.clear();
+      window.localStorage.removeItem(recoveryStorageKey() + "-code-verifier");
+      window.localStorage.removeItem(recoveryStorageKey() + "-code-verifier-resend-after");
+    }
   }
 
   async function consumePasswordRecovery() {
@@ -157,28 +222,34 @@
         || params.getAll("code").length !== 1 || !code) return false;
     recoveryBusy = true;
     try {
-      const client = getRecoveryClient();
-      const {data, error} = await client.exchangeCodeForSession(code);
-      // This context comes from the SDK's recovery-only PKCE verifier, not the URL.
-      if (error || data?.redirectType !== "PASSWORD_RECOVERY" || !data?.session?.access_token) {
-        await endPasswordRecovery();
-        return false;
-      }
-      const token = data.session.access_token;
-      const {data: identity, error: identityError} = await client.getUser(token);
-      if (identityError || !identity?.user?.id) { await endPasswordRecovery(); return false; }
-      // GET user verifies the JWT with Auth. Its signed AMR, not its user identity,
-      // establishes recovery provenance, including against relabelled normal codes.
-      const claims = JSON.parse(window.atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
-      if (!claims.amr?.some(entry => entry.method === "recovery") || !Number.isFinite(claims.exp)
-          || claims.exp <= Date.now() / 1000 || claims.sub !== identity.user.id) {
-        await endPasswordRecovery();
-        return false;
-      }
-      recoverySession = {access_token: token, expires_at: claims.exp};
-      return true;
+      return Boolean(await withRecoveryLock(async () => {
+        try {
+          const client = getRecoveryClient();
+          const {data, error} = await client.exchangeCodeForSession(code);
+          // This context comes from the SDK's recovery-only PKCE verifier, not the URL.
+          if (error || data?.redirectType !== "PASSWORD_RECOVERY" || !data?.session?.access_token) {
+            await endPasswordRecovery();
+            return false;
+          }
+          const token = data.session.access_token;
+          const {data: identity, error: identityError} = await client.getUser(token);
+          if (identityError || !identity?.user?.id) { await endPasswordRecovery(); return false; }
+          // GET user verifies the JWT with Auth. Its signed AMR, not its user identity,
+          // establishes recovery provenance, including against relabelled normal codes.
+          const claims = JSON.parse(window.atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+          if (!claims.amr?.some(entry => entry.method === "recovery") || !Number.isFinite(claims.exp)
+              || claims.exp <= Date.now() / 1000 || claims.sub !== identity.user.id) {
+            await endPasswordRecovery();
+            return false;
+          }
+          recoverySession = {access_token: token, expires_at: claims.exp};
+          return true;
+        } catch {
+          await endPasswordRecovery();
+          return false;
+        }
+      }));
     } catch {
-      await endPasswordRecovery();
       return false;
     } finally { recoveryBusy = false; }
   }
@@ -189,12 +260,16 @@
     if (password !== confirmation) throw new Error("The passwords do not match.");
     recoveryBusy = true;
     try {
-      const {error} = await getRecoveryClient().updateUser({password});
-      if (error) {
-        if ([401, 403].includes(error.status)) { await endPasswordRecovery(); throw new Error("PASSWORD_RECOVERY_SESSION_MISSING"); }
-        throw error;
-      }
-      await endPasswordRecovery();
+      const updated = await withRecoveryLock(async () => {
+        const {error} = await getRecoveryClient().updateUser({password});
+        if (error) {
+          if ([401, 403].includes(error.status)) { await endPasswordRecovery(); throw new Error("PASSWORD_RECOVERY_SESSION_MISSING"); }
+          throw error;
+        }
+        await endPasswordRecovery();
+        return true;
+      });
+      if (!updated) throw new Error("PASSWORD_RECOVERY_SESSION_MISSING");
     } finally { recoveryBusy = false; }
   }
 
@@ -677,7 +752,7 @@
     loadOrders, updateOrderStatus, recordAuthoritativePayment, listAuthoritativePaymentOperations, updateMenuItemPhoto, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
     loadReportDashboard, loadSalesReport, loadMenuReport, loadTableReport, loadHourlyReport, loadOrderReport,
     createRestaurantTable, updateRestaurantTable, deactivateRestaurantTable, updateRestaurantProfile,
-    requestPasswordRecovery, consumePasswordRecovery, updatePassword, signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, getPlatformDashboardProfile, signOut,
+    requestPasswordRecovery, getPasswordRecoveryCooldown, consumePasswordRecovery, updatePassword, signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, getPlatformDashboardProfile, signOut,
     loadPlatformRestaurants, platformCreateRestaurant,
     createRestaurant, createTables, importSampleMenu, completeOnboarding,
     createRestaurantInvite, acceptRestaurantInvite, listRestaurantTeam, revokeRestaurantInvite
