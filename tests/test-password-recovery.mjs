@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { createHash } from 'node:crypto';
+import { createHash, webcrypto } from 'node:crypto';
 import { AuthClient } from '@supabase/auth-js';
 
 const source = readFileSync(new URL('../supabase-client.js', import.meta.url), 'utf8');
@@ -46,13 +46,14 @@ function harness({ storage = new Map(), method = 'recovery', fail = '', fragment
     throw new Error('Unexpected mocked endpoint: ' + url);
   };
   const window = {
+    crypto:webcrypto, navigator:{locks:{request:async (name, options, callback) => (callback || options)({name,mode:'exclusive'})}},
     AveniqRecoveryAuth:{AuthClient}, TABLEORDER_SUPABASE:{url:'https://mock.invalid', publishableKey:'sb_publishable_test'},
-    atob:value => Buffer.from(value, 'base64').toString('binary'),
+    btoa:value=>Buffer.from(value,'binary').toString('base64'), atob:value => Buffer.from(value, 'base64').toString('binary'),
     location:{pathname:path, search, hash:fragment, origin:'https://preview.example', href:'https://preview.example'+path+search+fragment},
     localStorage:{getItem:key=>storage.get(key)||null, setItem:(key,value)=>storage.set(key,value), removeItem:key=>storage.delete(key)},
     history:{replaceState(){window.location.hash='';window.location.search='';}}
   };
-  vm.runInNewContext(source, {window, URLSearchParams, URL, Date, Map, console, fetch: fetchOverride || fetch});
+  vm.runInNewContext(source, {window, URLSearchParams, URL, Date, Map, TextEncoder, console, fetch: fetchOverride || fetch});
   return { cloud:window.TableOrderCloud, window, calls, storage, fetch, expireCode: code => codes.delete(code),
     code(authenticationMethod=method) { const code='one-time-'+(++sequence); codes.set(code,{challenge,method:authenticationMethod}); window.location.search='?code='+code;return code; }
   };
@@ -84,11 +85,13 @@ assert.ok(![...h.storage.values()].some(value => value.includes('access_token'))
 h.code();
 assert.equal(await h.cloud.consumePasswordRecovery(), true);
 assert.equal(h.window.location.search, '');
-assert.equal(h.storage.has(verifierKey), false, 'SDK removes one-time verifier');
-assert.equal(h.storage.size, 0, 'Recovery session is memory-only');
+assert.equal(h.storage.has(verifierKey), true, 'Active verifier remains bounded until the password update completes');
+assert.ok(![...h.storage.values()].some(value => value.includes('access_token')), 'Recovery session is memory-only');
 await assert.rejects(() => h.cloud.updatePassword('short', 'short'), /12/);
 await assert.rejects(() => h.cloud.updatePassword('long-password-123', 'different-password'), /match/);
 await h.cloud.updatePassword('long-password-123', 'long-password-123');
+assert.equal(h.storage.has(verifierKey), false, 'Password update removes the recovery verifier');
+assert.equal(h.storage.has(verifierKey + '-resend-after'), false, 'Password update removes cooldown metadata');
 const update = h.calls.find(call => call.options.method === 'PUT');
 assert.equal(JSON.parse(update.options.body).password, 'long-password-123');
 assert.ok(h.calls.some(call => call.url.includes('/logout?scope=local')));

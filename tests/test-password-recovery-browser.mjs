@@ -134,7 +134,9 @@ try {
   });
   await send('Runtime.enable');
   await send('Page.enable');
-  await send('Page.addScriptToEvaluateOnNewDocument', { source: `
+  const browserInit = `
+    const nativeNow = Date.now.bind(Date);
+    Date.now = () => Number(localStorage.getItem('__recoveryNow')) || nativeNow();
     const nativeFetch = window.fetch.bind(window);
     window.fetch = async (input, options = {}) => {
       const url = typeof input === 'string' ? input : input.url;
@@ -144,7 +146,8 @@ try {
       if (new URL(url, location.href).origin !== location.origin) throw new Error('External fetch blocked: ' + url);
       return nativeFetch(input, options);
     };
-  ` });
+  `;
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: browserInit });
   // Network safety also blocks non-fetch external resources.
   await send('Network.enable');
   await send('Network.setBlockedURLs', { urls: ['https://*', 'http://mock.invalid/*'] });
@@ -160,6 +163,7 @@ try {
   }
   async function requestRecovery() {
     await navigate('/forgot-password');
+    await evaluate(`localStorage.setItem('__recoveryNow', String(Date.now() + 61000));window.refreshPasswordRecoveryCooldown?.()`);
     await assertLayout('forgot password');
     await evaluate(`document.getElementById('passwordRecoveryEmail').value='staff@example.com';document.getElementById('passwordRecoveryForm').requestSubmit()`);
     await waitFor(`!document.getElementById('passwordRecoverySuccess').classList.contains('hidden')`, 'generic recovery response');
@@ -177,23 +181,95 @@ try {
     assert.equal(updateCount(), before, 'Rejected callback must never update password');
   }
 
+  // An independent page target shares only browser-managed origin storage and
+  // Web Locks with the first tab; it has its own Auth client and JS globals.
+  async function openSecondTab() {
+    const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
+    const targets = await (await fetch('http://127.0.0.1:' + debugPort + '/json')).json();
+    const socket = new WebSocket(targets.find(page => page.id === targetId).webSocketDebuggerUrl);
+    await new Promise(resolve => socket.addEventListener('open', resolve, { once: true }));
+    let id = 0;
+    const commands = new Map();
+    socket.addEventListener('message', ({ data }) => {
+      const event = JSON.parse(data), command = commands.get(event.id);
+      if (command) { commands.delete(event.id); event.error ? command.reject(new Error(JSON.stringify(event.error))) : command.resolve(event.result); }
+    });
+    const command = (method, params = {}) => new Promise((resolve, reject) => {
+      const next = ++id; commands.set(next, { resolve, reject });
+      socket.send(JSON.stringify({ id: next, method, params }));
+    });
+    const run = async expression => {
+      const result = await command('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+      assert.equal(result.exceptionDetails, undefined, JSON.stringify(result.exceptionDetails));
+      return result.result.value;
+    };
+    await command('Page.enable');
+    await command('Page.addScriptToEvaluateOnNewDocument', { source: browserInit });
+    await command('Network.enable');
+    await command('Network.setBlockedURLs', { urls: ['https://*', 'http://mock.invalid/*'] });
+    await command('Page.navigate', { url: origin + '/forgot-password' });
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if (await run('document.readyState === "complete" && Boolean(window.TableOrderCloud)')) break;
+      await delay(30);
+    }
+    assert.equal(await run('Boolean(window.TableOrderCloud)'), true, 'Second tab loaded');
+    return { run, close: async () => { socket.close(); await send('Target.closeTarget', { targetId }); } };
+  }
+
+  await navigate('/forgot-password');
+  await evaluate('localStorage.clear()');
+  const secondTab = await openSecondTab();
+  try {
+    const recoverCount = () => calls.filter(call => call.url.includes('/recover')).length;
+    const before = recoverCount();
+    await Promise.all([
+      evaluate(`window.TableOrderCloud.requestPasswordRecovery('staff@example.com')`),
+      secondTab.run(`window.TableOrderCloud.requestPasswordRecovery('staff@example.com')`)
+    ]);
+    assert.equal(recoverCount(), before + 1, 'Simultaneous independent tabs issue one request');
+    const preserved = await evaluate(`localStorage.getItem('${verifierKey}')`);
+    assert.ok(preserved);
+    assert.equal(await secondTab.run(`localStorage.getItem('${verifierKey}')`), preserved, 'Tabs share the active verifier');
+    assert.ok(await evaluate('window.TableOrderCloud.getPasswordRecoveryCooldown()') > 0);
+    assert.ok(await secondTab.run('window.TableOrderCloud.getPasswordRecoveryCooldown()') > 0);
+    await secondTab.run('new Promise(resolve => setTimeout(resolve, 1100))');
+    assert.equal(await secondTab.run(`document.getElementById('passwordRecoverySubmit').disabled`), true, 'Other tab UI reflects shared cooldown');
+    await Promise.all([
+      evaluate(`window.TableOrderCloud.requestPasswordRecovery('staff@example.com')`),
+      secondTab.run(`window.TableOrderCloud.requestPasswordRecovery('staff@example.com')`)
+    ]);
+    assert.equal(recoverCount(), before + 1, 'Cooldown suppresses both tabs');
+    await evaluate(`localStorage.setItem('__recoveryNow', String(Date.now() + 61000))`);
+    await secondTab.run(`window.TableOrderCloud.requestPasswordRecovery('staff@example.com')`);
+    assert.equal(recoverCount(), before + 2, 'Resend available in another tab after shared cooldown');
+    assert.equal(await evaluate(`localStorage.getItem('${verifierKey}')`), preserved, 'Resend keeps verifier and original lifetime');
+  } finally { await secondTab.close(); }
+
   for (const width of [375, 768, 1280]) {
     await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width === 375 });
     await navigate('/forgot-password');
     await evaluate('localStorage.clear()');
     await requestRecovery();
+    const requestCount = calls.filter(call => call.url.includes('/recover')).length;
+    await evaluate(`document.getElementById('passwordRecoveryRetry').click();document.getElementById('passwordRecoveryRetry').click()`);
+    assert.equal(calls.filter(call => call.url.includes('/recover')).length, requestCount, 'Rapid retry clicks do not submit within cooldown');
+    assert.equal(await evaluate(`document.getElementById('passwordRecoveryRetry').getAttribute('aria-disabled')`), 'true', 'Retry announces cooldown');
+    assert.match(await evaluate(`document.getElementById('passwordRecoveryRetry').textContent`), /\d+.*s|\d+.*second/i, 'Retry explains wait');
+    await assertLayout('recovery cooldown');
     const successText = await evaluate(`document.getElementById('passwordRecoverySuccess').textContent`);
-    recoverStatus = 400;
+    const firstCode = issueCode();
+    const activeVerifier = await evaluate(`localStorage.getItem('${verifierKey}')`);
+    recoverStatus = 429;
     await requestRecovery();
     assert.equal(await evaluate(`document.getElementById('passwordRecoverySuccess').textContent`), successText, 'Provider failure must not enumerate accounts');
+    assert.equal(await evaluate(`localStorage.getItem('${verifierKey}')`), activeVerifier, '429 cannot delete or extend active verifier');
     recoverStatus = 200;
-    await requestRecovery();
-    const code = issueCode();
+    const code = firstCode;
     await navigate('/reset-password?code=' + code);
     await assertLayout('valid callback');
     assert.equal(await evaluate(`document.getElementById('passwordRecoveryNew').disabled`), false, 'Genuine callback enables password form');
     assert.equal(await evaluate('location.search + location.hash'), '', 'Callback credentials stripped');
-    assert.equal(await evaluate(`localStorage.getItem('${verifierKey}')`), null, 'One-time verifier consumed');
+    assert.ok(await evaluate(`localStorage.getItem('${verifierKey}')`), 'Bounded verifier retained until successful password update');
     assert.equal(await evaluate(`localStorage.getItem('${normalSessionKey}')`), null, 'Recovery never populates login session');
     let before = updateCount();
     await evaluate(`document.getElementById('passwordRecoveryNew').value='short';document.getElementById('passwordRecoveryConfirm').value='short';document.getElementById('passwordRecoveryForm').requestSubmit()`);
@@ -207,6 +283,7 @@ try {
     await evaluate(`document.getElementById('passwordRecoveryConfirm').value='long-password-123';document.getElementById('passwordRecoveryForm').requestSubmit();document.getElementById('passwordRecoveryForm').requestSubmit()`);
     await waitFor(`document.getElementById('passwordRecoverySuccess').textContent.includes('updated')`, 'password success');
     assert.equal(updateCount(), before + 1, 'Duplicate submissions update once');
+    assert.equal(await evaluate(`localStorage.getItem('${verifierKey}')`), null, 'Successful password update clears verifier');
     assert.ok(calls.some(call => call.url.includes('/logout')), 'Recovery session ends after update');
     assert.equal(await evaluate(`window.TableOrderCloud.updatePassword('long-password-123','long-password-123').then(()=> 'unexpected success',error=>error.message)`), 'PASSWORD_RECOVERY_SESSION_MISSING', 'Successful credentials cannot replay');
     assert.equal(updateCount(), before + 1);
@@ -242,7 +319,7 @@ try {
     console.log(`PASS browser recovery workflow at ${width}px (real bundled PKCE SDK)`);
   }
   assert.deepEqual(exceptions, [], 'No uncaught browser exceptions');
-  console.log('PASS password recovery browser QA: requests, genuine/invalid/expired/replayed callbacks, validation, duplicate update, forged tokens, stored login isolation, and login at 375/768/1280px.');
+  console.log('PASS password recovery browser QA: independent-tab request serialization/shared cooldown, preserved verifier after 429, rapid retry clicks, genuine/invalid/expired/replayed callbacks, validation, duplicate update, forged tokens, stored login isolation, and login at 375/768/1280px.');
 } finally {
   for (const command of pending.values()) clearTimeout(command.timer);
   ws?.close();
