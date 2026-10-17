@@ -641,12 +641,12 @@
   function loadHourlyReport(restaurantId, range) { return loadReportRpc("get_hourly_report", restaurantId, range); }
   function loadOrderReport(restaurantId, range) { return loadReportRpc("get_order_report", restaurantId, range); }
 
-  async function scopedPatch(table, rowId, restaurantId, fields) {
+  async function scopedPatch(table, rowId, restaurantId, fields, returning = "") {
     const session = await getSession();
     const tenantId = restaurantId || activeMembership?.restaurantId || activePlatformDashboard?.restaurantId;
     if (!tenantId) throw new Error("Restaurant context is missing.");
-    return request(`${table}?id=eq.${encodeURIComponent(rowId)}&restaurant_id=eq.${encodeURIComponent(tenantId)}`, {
-      method: "PATCH", accessToken: session?.access_token, headers: { Prefer: "return=minimal" }, body: JSON.stringify(fields)
+    return request(`${table}?id=eq.${encodeURIComponent(rowId)}&restaurant_id=eq.${encodeURIComponent(tenantId)}${returning ? `&select=${returning}` : ""}`, {
+      method: "PATCH", accessToken: session?.access_token, headers: { Prefer: returning ? "return=representation" : "return=minimal" }, body: JSON.stringify(fields)
     });
   }
 
@@ -732,10 +732,15 @@
       body: JSON.stringify({ restaurant_id: restaurantId, local_id: table.id, table_number: number, table_name: table.name, name: table.name, table_token: `tk_${createUuid().replace(/-/g, "").toUpperCase()}`, sort_order: sortOrder || number })
     });
   }
-  function updateRestaurantTable(id, fields, restaurantId) {
+  function updateRestaurantTable(id, fields, restaurantId, { returnRepresentation = false } = {}) {
     const mapped = { ...fields };
-    if (fields.name) mapped.table_name = fields.name;
-    return scopedPatch("tables", id, restaurantId, mapped);
+    if (typeof fields.name === "string") {
+      mapped.name = fields.name.trim();
+      if (!mapped.name) throw new Error("Enter a table name.");
+      mapped.table_name = mapped.name;
+    }
+    return scopedPatch("tables", id, restaurantId, mapped,
+      returnRepresentation ? "id,restaurant_id,local_id,name,table_name" : "");
   }
   function deactivateRestaurantTable(id, restaurantId) { return updateRestaurantTable(id, { is_active: false }, restaurantId); }
 
