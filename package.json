@@ -19,7 +19,10 @@
     "test:tenant-routing": "node ./tests/test-app-host-membership-routing.mjs",
     "test:tenant-routing:browser": "node ./tests/test-tenant-routing-browser.mjs",
     "test:qr-export": "node ./tests/test-qr-export.mjs",
-    "test:qr-export:browser": "node ./tests/test-qr-export-browser.mjs"
+    "test:qr-export:browser": "node ./tests/test-qr-export-browser.mjs",
+    "test:table-rename": "node ./tests/test-table-rename.mjs",
+    "test:table-rename:browser": "node ./tests/test-table-rename-browser.mjs",
+    "test:table-rename:local": "node ./tests/test-table-rename-local-runtime.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.1",
