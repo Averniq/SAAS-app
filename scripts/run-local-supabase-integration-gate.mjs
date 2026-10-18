@@ -21,6 +21,8 @@ const password = `Gate-${randomBytes(12).toString('base64url')}`;
 const anonKey = sign({ role: 'anon' });
 const serviceKey = sign({ role: 'service_role' });
 const holds = process.argv.includes('--hold') || process.argv.includes('--browser-ipc') || process.argv.includes('--browser-port');
+let emailCapture = false;
+let mailPort;
 let appServer;
 let apiPort;
 let appPort;
@@ -112,6 +114,11 @@ async function startApp() {
   assert.ok(!builtConfig.includes(serviceKey), 'local browser build must not contain service-role key');
   appServer = createServer(async (request, response) => {
     const url = new URL(request.url || '/', `http://127.0.0.1:${appPort}`);
+    if (url.pathname === '/supabase-config.js') {
+      response.writeHead(200, {'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store'});
+      response.end(builtConfig);
+      return;
+    }
     if (url.pathname.startsWith('/auth/v1/') || url.pathname.startsWith('/rest/v1/')) {
       const body = ['GET', 'HEAD'].includes(request.method || '') ? undefined : request;
       const upstream = await fetch(`http://127.0.0.1:${apiPort}${url.pathname}${url.search}`, { method: request.method, headers: request.headers, body, ...(body ? { duplex: 'half' } : {}) });
@@ -132,7 +139,7 @@ async function clean() {
   if (cleaned) return;
   cleaned = true;
   if (appServer) await new Promise(resolveClosed => appServer.close(resolveClosed));
-  for (const name of [names.kong, names.rest, names.auth, names.db]) await command(['rm', '-f', name]);
+  for (const name of [names.kong, names.rest, names.auth, `${tag}-mail`, names.db]) await command(['rm', '-f', name]);
   await command(['network', 'rm', names.network]);
   if (kongFile) await rm(kongFile, { force: true });
 }
@@ -171,7 +178,11 @@ async function startStack() {
   }
   await sql("alter role authenticator password 'postgres'; alter role supabase_auth_admin password 'postgres';");
   pass(`fresh canonical replay (${migrations.length} migrations; initial-owner migration fault rollback verified)`);
-  await docker(['run', '-d', '--name', names.auth, '--network', names.network, '--network-alias', 'auth', '-e', 'GOTRUE_API_HOST=0.0.0.0', '-e', 'GOTRUE_API_PORT=9999', '-e', 'GOTRUE_DB_DRIVER=postgres', '-e', 'GOTRUE_DB_DATABASE_URL=postgresql://supabase_auth_admin:postgres@db:5432/postgres', '-e', `GOTRUE_JWT_SECRET=${secret}`, '-e', `GOTRUE_JWT_KEYS=${jwtKeys}`, '-e', 'GOTRUE_JWT_AUD=authenticated', '-e', 'GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated', '-e', `GOTRUE_JWT_ISSUER=http://127.0.0.1:${apiPort}/auth/v1`, '-e', `API_EXTERNAL_URL=http://127.0.0.1:${apiPort}/auth/v1`, '-e', 'GOTRUE_JWT_EXP=3600', '-e', 'GOTRUE_JWT_ADMIN_ROLES=service_role', '-e', 'GOTRUE_SITE_URL=http://127.0.0.1', '-e', 'GOTRUE_URI_ALLOW_LIST=http://127.0.0.1', '-e', 'GOTRUE_DISABLE_SIGNUP=false', '-e', 'GOTRUE_MAILER_AUTOCONFIRM=true', '-e', 'GOTRUE_EXTERNAL_EMAIL_ENABLED=true', '-e', 'GOTRUE_MAILER_OTP_EXP=3600', '-e', 'GOTRUE_PASSWORD_MIN_LENGTH=8', 'public.ecr.aws/supabase/gotrue:v2.196.0']);
+  if (emailCapture) {
+    mailPort = await port();
+    await docker(['run', '-d', '--name', `${tag}-mail`, '--network', names.network, '--network-alias', 'mail', '-p', `127.0.0.1:${mailPort}:8025`, 'public.ecr.aws/supabase/mailpit:v1.31.3']);
+  }
+  await docker(['run', '-d', '--name', names.auth, '--network', names.network, '--network-alias', 'auth', '-e', 'GOTRUE_API_HOST=0.0.0.0', '-e', 'GOTRUE_API_PORT=9999', '-e', 'GOTRUE_DB_DRIVER=postgres', '-e', 'GOTRUE_DB_DATABASE_URL=postgresql://supabase_auth_admin:postgres@db:5432/postgres', '-e', `GOTRUE_JWT_SECRET=${secret}`, '-e', `GOTRUE_JWT_KEYS=${jwtKeys}`, '-e', 'GOTRUE_JWT_AUD=authenticated', '-e', 'GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated', '-e', `GOTRUE_JWT_ISSUER=http://127.0.0.1:${apiPort}/auth/v1`, '-e', `API_EXTERNAL_URL=http://127.0.0.1:${apiPort}/auth/v1`, '-e', 'GOTRUE_JWT_EXP=3600', '-e', 'GOTRUE_JWT_ADMIN_ROLES=service_role', '-e', 'GOTRUE_SITE_URL=http://127.0.0.1', '-e', emailCapture ? 'GOTRUE_URI_ALLOW_LIST=http://127.0.0.1:*/join/*' : 'GOTRUE_URI_ALLOW_LIST=http://127.0.0.1', '-e', 'GOTRUE_DISABLE_SIGNUP=false', '-e', `GOTRUE_MAILER_AUTOCONFIRM=${!emailCapture}`, ...(emailCapture ? ['-e', 'GOTRUE_SMTP_HOST=mail', '-e', 'GOTRUE_SMTP_PORT=1025', '-e', 'GOTRUE_SMTP_ADMIN_EMAIL=local@example.test', '-e', 'GOTRUE_SMTP_SENDER_NAME=Aveniq local', '-e', 'GOTRUE_SMTP_MAX_FREQUENCY=1s', '-e', 'GOTRUE_RATE_LIMIT_EMAIL_SENT=100', '-e', 'GOTRUE_MAILER_URLPATHS_CONFIRMATION=/auth/v1/verify', '-e', 'GOTRUE_MAILER_URLPATHS_RECOVERY=/auth/v1/verify', '-e', 'GOTRUE_MAILER_URLPATHS_INVITE=/auth/v1/verify', '-e', 'GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE=/auth/v1/verify'] : []), '-e', 'GOTRUE_EXTERNAL_EMAIL_ENABLED=true', '-e', 'GOTRUE_MAILER_OTP_EXP=3600', '-e', 'GOTRUE_PASSWORD_MIN_LENGTH=8', 'public.ecr.aws/supabase/gotrue:v2.196.0']);
   await docker(['run', '-d', '--name', names.rest, '--network', names.network, '--network-alias', 'rest', '-e', 'PGRST_DB_URI=postgresql://authenticator:postgres@db:5432/postgres', '-e', 'PGRST_DB_SCHEMAS=public,graphql_public', '-e', 'PGRST_DB_ANON_ROLE=anon', '-e', 'PGRST_DB_EXTRA_SEARCH_PATH=public,extensions', '-e', 'PGRST_DB_MAX_ROWS=1000', '-e', `PGRST_JWT_SECRET=${JSON.stringify({ keys: JSON.parse(jwtKeys) })}`, '-e', 'PGRST_JWT_AUD=authenticated', 'public.ecr.aws/supabase/postgrest:v16.2']);
   await docker(['create', '--name', names.kong, '--network', names.network, '-p', `127.0.0.1:${apiPort}:8000`, '-e', 'KONG_DATABASE=off', '-e', 'KONG_DECLARATIVE_CONFIG=/home/kong/kong.yml', '-e', 'KONG_PLUGINS=cors', 'public.ecr.aws/supabase/kong:2.8.1']);
   await docker(['cp', kongFile, `${names.kong}:/home/kong/kong.yml`]);
@@ -304,7 +315,8 @@ async function verifyApi() {
   return { owner, kitchen, cashier, token: current.data.token, orderId: placed.data.id, restaurantId: sake };
 }
 
-export async function runLocalGate() {
+export async function runLocalGate(options = {}) {
+  emailCapture = options.emailCapture === true;
   try {
     await startStack();
     gatePhase = 'api-contracts';
@@ -346,7 +358,11 @@ export async function runLocalGate() {
 }
 export async function withLocalBrowserCredentials(action) {
   if (!completed || !browserState || cleaned) throw new Error('Local gates must pass before browser credentials are used');
-  return action({ ...browserState, password });
+  return action({ ...browserState, password, ...(emailCapture ? {mailUrl: `http://127.0.0.1:${mailPort}`} : {}) });
+}
+export async function withLocalGateDatabase(action) {
+  if (!completed || cleaned) throw new Error('Local gates must pass before database test access');
+  return action(names.db);
 }
 export const cleanupLocalGate = clean;
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

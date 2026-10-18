@@ -22,7 +22,10 @@
     "test:qr-export:browser": "node ./tests/test-qr-export-browser.mjs",
     "test:table-rename": "node ./tests/test-table-rename.mjs",
     "test:table-rename:browser": "node ./tests/test-table-rename-browser.mjs",
-    "test:table-rename:local": "node ./tests/test-table-rename-local-runtime.mjs"
+    "test:table-rename:local": "node ./tests/test-table-rename-local-runtime.mjs",
+    "test:staff-management": "node ./tests/test-staff-management-client.mjs && node ./tests/test-staff-invite-endpoint.mjs",
+    "test:staff-management:browser": "node ./tests/test-staff-management-browser.mjs",
+    "test:staff-management:local": "node ./tests/test-staff-management-local.mjs && node ./tests/test-staff-invite-local.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.1",

@@ -1001,6 +1001,7 @@ let qrSessionGeneration = 0;
 function clearIssuedQrSessionState() {
   issuedQrUrls.clear();
   qrSessionGeneration += 1;
+  if (typeof resetStaffManagementState === "function") resetStaffManagementState();
   pendingQrExport = false;
   if (typeof document !== "undefined") document.getElementById("qrExportDialog")?.close();
   publicQrTokenMetadataAvailability = "unavailable";
@@ -1445,7 +1446,7 @@ function renderStaffSession() {
   tabs.classList.toggle("customer-tabs-only", !staffUser);
 
   if (staffUser) {
-    document.getElementById("staffName").textContent = staffUser.email.split("@")[0];
+    document.getElementById("staffName").textContent = staffUser.displayName || staffUser.email.split("@")[0];
     document.getElementById("staffRole").textContent = STAFF_ROLE_LABELS[staffUser.role] || staffUser.role;
   }
 
@@ -3982,78 +3983,155 @@ function restaurantInviteLink(token) {
   return `${window.location.origin}/join/${encodeURIComponent(token)}`;
 }
 
-function renderRestaurantTeam() {
-  const staffList = document.getElementById("restaurantTeamList");
-  const inviteList = document.getElementById("restaurantInviteList");
-  if (!staffList || !inviteList) return;
+let staffEditDraft = null;
+let staffMutationBusy = false;
+let teamRequestEpoch = 0;
+let inviteRequestId = null;
+const EDITABLE_STAFF_ROLES = ["manager", "staff", "kitchen", "cashier"];
 
-  staffList.innerHTML = restaurantTeamData.staff.length
-    ? restaurantTeamData.staff.map((member) => `
-      <article class="team-row role-${escapeHtml(member.role)}">
-        <div><strong>${escapeHtml(member.email || "Account")}</strong><span>${escapeHtml(STAFF_ROLE_LABELS[member.role] || member.role)}${member.is_current ? " · You" : ""}</span></div>
-        <span class="role-badge">${escapeHtml(STAFF_ROLE_LABELS[member.role] || member.role)}</span>
-      </article>`).join("")
-    : `<div class="empty-state">No team members found.</div>`;
-
-  inviteList.innerHTML = restaurantTeamData.invites.length
-    ? restaurantTeamData.invites.map((invite) => `
-      <article class="team-row invite-row">
-        <div><strong>${escapeHtml(invite.email)}</strong><span>${escapeHtml(STAFF_ROLE_LABELS[invite.role] || invite.role)} · expires ${escapeHtml(new Date(invite.expires_at).toLocaleDateString())}</span></div>
-        <div class="team-row-actions">
-          <button class="ghost-button" type="button" data-copy-team-invite="${escapeHtml(invite.id)}">Copy link</button>
-          <button class="ghost-button" type="button" data-revoke-team-invite="${escapeHtml(invite.id)}">Revoke</button>
-        </div>
-      </article>`).join("")
-    : `<div class="empty-state">No pending invites.</div>`;
-
-  inviteList.querySelectorAll("[data-copy-team-invite]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const invite = restaurantTeamData.invites.find((entry) => entry.id === button.dataset.copyTeamInvite);
-      if (invite?.token) copyText(restaurantInviteLink(invite.token));
-    });
-  });
-  inviteList.querySelectorAll("[data-revoke-team-invite]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      button.disabled = true;
-      try {
-        await window.TableOrderCloud.revokeRestaurantInvite(button.dataset.revokeTeamInvite);
-        await loadRestaurantTeam();
-      } catch (error) { setRestaurantTeamError(error.message); }
-      finally { button.disabled = false; }
-    });
-  });
-}
-
-async function loadRestaurantTeam() {
-  if (!staffUser?.restaurantId || !["owner", "manager", "platform_admin"].includes(staffUser.role)) return;
-  setRestaurantTeamError("");
-  try {
-    restaurantTeamData = await window.TableOrderCloud.listRestaurantTeam(staffUser.restaurantId);
-    renderRestaurantTeam();
-  } catch (error) {
-    const missingMigration = /list_restaurant_team|schema cache|could not find/i.test(error.message);
-    setRestaurantTeamError(missingMigration ? "Run migration 003_restaurant_staff_invites.sql in Supabase first." : error.message);
+function resetStaffManagementState() {
+  staffEditDraft = null; staffMutationBusy = false; inviteRequestId = null;
+  restaurantTeamData = { staff: [], invites: [] }; teamRequestEpoch += 1;
+  acceptedStaffInvite = null;
+  const inviteButton = document.getElementById("createRestaurantInvite");
+  if (inviteButton) inviteButton.disabled = false;
+  for (const id of ["restaurantTeamList", "disabledRestaurantTeamList", "restaurantInviteList"]) {
+    const list = document.getElementById(id);
+    if (list) list.innerHTML = "";
   }
 }
-
+function teamFence() {
+  return { userId: staffUser?.id, restaurantId: staffUser?.restaurantId, role: staffUser?.role, generation: qrSessionGeneration };
+}
+function teamFenceMatches(fence) {
+  return Boolean(fence?.userId && fence.restaurantId && staffUser?.id === fence.userId
+    && staffUser?.restaurantId === fence.restaurantId && staffUser?.role === fence.role && qrSessionGeneration === fence.generation);
+}
+function teamErrorMessage(error) {
+  const message = `${error?.code || ""} ${error?.message || ""}`;
+  if (/VERSION|CONFLICT|ALREADY_EXISTS|already.*member/i.test(message)) return "This account or invitation has changed. Refresh the team list before trying again.";
+  if (/COOLDOWN|rate|429/i.test(message)) return "Please wait 60 seconds before sending another invitation to this email.";
+  if (/DENIED|REQUIRED|401|403|permission/i.test(message)) return "Your access has changed. Please sign in again or contact the restaurant Owner.";
+  if (/NAME|EMAIL|ROLE|INVALID_REQUEST/i.test(message)) return "Enter a staff name, a valid email and an available role.";
+  return "We could not complete that action. Refresh the team list and try again.";
+}
+function canEditStaff(member) {
+  return Boolean(staffUser?.role === "owner" && member?.id && member.user_id !== staffUser.id && member.role !== "owner");
+}
+function renderRestaurantTeam() {
+  const staffList = document.getElementById("restaurantTeamList");
+  const disabledList = document.getElementById("disabledRestaurantTeamList");
+  const inviteList = document.getElementById("restaurantInviteList");
+  if (!staffList || !inviteList) return;
+  const members = Array.isArray(restaurantTeamData.staff) ? restaurantTeamData.staff : [];
+  const row = member => {
+    const editable = canEditStaff(member);
+    const draft = editable && staffEditDraft?.id === member.id && teamFenceMatches(staffEditDraft.fence) ? staffEditDraft : null;
+    return `<article class="team-row role-${escapeHtml(member.role)}" data-staff-member="${escapeHtml(member.id || member.user_id)}">
+      <div><strong>${escapeHtml(member.display_name || member.email || "Account")}</strong><span>${escapeHtml(member.email || "")}  -  ${escapeHtml(STAFF_ROLE_LABELS[member.role] || "Staff")}${member.is_current ? "  -  You" : ""}${member.is_active === false ? "  -  Disabled" : ""}</span></div>
+      ${draft ? `<form class="staff-edit-form" id="staffEditForm"><label class="field"><span>Staff name</span><input name="displayName" value="${escapeHtml(draft.name)}" maxlength="100" required ${staffMutationBusy ? "disabled" : ""} /></label>
+        <label class="field"><span>Assigned role</span><select name="role" ${staffMutationBusy ? "disabled" : ""}>${EDITABLE_STAFF_ROLES.map(role => `<option value="${role}" ${role === draft.role ? "selected" : ""}>${escapeHtml(STAFF_ROLE_LABELS[role])}</option>`).join("")}</select></label>
+        <p class="auth-error ${draft.error ? "" : "hidden"}" role="alert">${escapeHtml(draft.error || "")}</p><div class="team-row-actions"><button class="primary-button" type="submit" ${staffMutationBusy ? "disabled" : ""}>${staffMutationBusy ? "Saving - " : "Save"}</button><button class="ghost-button" type="button" data-cancel-staff ${staffMutationBusy ? "disabled" : ""}>Cancel</button></div></form>`
+      : editable ? `<div class="team-row-actions"><button class="ghost-button" type="button" data-edit-staff="${escapeHtml(member.id)}" ${staffMutationBusy ? "disabled" : ""}>Edit</button><button class="ghost-button" type="button" data-toggle-staff="${escapeHtml(member.id)}" ${staffMutationBusy ? "disabled" : ""}>${member.is_active === false ? "Reactivate" : "Disable"}</button></div>` : `<span class="role-badge">${member.role === "owner" ? "Owner  -  protected" : escapeHtml(STAFF_ROLE_LABELS[member.role] || "Staff")}</span>`}
+    </article>`;
+  };
+  staffList.innerHTML = members.filter(m => m.is_active !== false).map(row).join("") || `<div class="empty-state">No active team members.</div>`;
+  if (disabledList) disabledList.innerHTML = members.filter(m => m.is_active === false).map(row).join("") || `<div class="empty-state">No disabled team members.</div>`;
+  const invites = Array.isArray(restaurantTeamData.invites) ? restaurantTeamData.invites : [];
+  inviteList.innerHTML = invites.map(invite => `<article class="team-row invite-row"><div><strong>${escapeHtml(invite.display_name || invite.email)}</strong><span>${escapeHtml(invite.email)}  -  ${escapeHtml(STAFF_ROLE_LABELS[invite.role] || "Staff")}  -  expires ${escapeHtml(new Date(invite.expires_at).toLocaleDateString())}</span></div><div class="team-row-actions"><button class="ghost-button" type="button" data-copy-team-invite="${escapeHtml(invite.id)}">Copy link</button><button class="ghost-button" type="button" data-revoke-team-invite="${escapeHtml(invite.id)}">Revoke</button></div></article>`).join("") || `<div class="empty-state">No pending invitations.</div>`;
+  for (const list of [staffList, disabledList].filter(Boolean)) {
+    list.querySelectorAll("[data-edit-staff]").forEach(button => button.addEventListener("click", () => startStaffEdit(button.dataset.editStaff)));
+    list.querySelectorAll("[data-toggle-staff]").forEach(button => button.addEventListener("click", () => toggleStaffAccess(button.dataset.toggleStaff)));
+    list.querySelectorAll("[data-cancel-staff]").forEach(button => button.addEventListener("click", () => { staffEditDraft = null; renderRestaurantTeam(); }));
+  }
+  document.getElementById("staffEditForm")?.addEventListener("submit", saveStaffEdit);
+  inviteList.querySelectorAll("[data-copy-team-invite]").forEach(button => button.addEventListener("click", () => {
+    const invite = invites.find(entry => entry.id === button.dataset.copyTeamInvite);
+    if (invite?.token) copyText(restaurantInviteLink(invite.token));
+  }));
+  inviteList.querySelectorAll("[data-revoke-team-invite]").forEach(button => button.addEventListener("click", async () => {
+    const fence = teamFence(); button.disabled = true;
+    try { await window.TableOrderCloud.revokeRestaurantInvite(button.dataset.revokeTeamInvite); if (teamFenceMatches(fence)) await loadRestaurantTeam(); }
+    catch (error) { if (teamFenceMatches(fence)) setRestaurantTeamError(teamErrorMessage(error)); }
+    finally { button.disabled = false; }
+  }));
+}
+function startStaffEdit(id) {
+  if (staffMutationBusy) return;
+  const member = restaurantTeamData.staff.find(m => m.id === id);
+  if (!canEditStaff(member)) return;
+  staffEditDraft = { id, name: member.display_name || member.email || "", role: member.role, version: member.version, fence: teamFence() };
+  setRestaurantTeamError(""); renderRestaurantTeam();
+}
+async function applyStaffUpdate(member, input, fence) {
+  const updated = await window.TableOrderCloud.updateRestaurantStaff(fence.restaurantId, member.id, input);
+  if (!teamFenceMatches(fence)) return false;
+  if (!updated || updated.id !== member.id || updated.restaurant_id !== fence.restaurantId || updated.user_id !== member.user_id
+    || updated.display_name !== input.displayName || updated.role !== input.role || updated.is_active !== input.isActive
+    || !Number.isSafeInteger(updated.version) || updated.version <= input.expectedVersion) throw new Error("STAFF_RESPONSE_MISMATCH");
+  restaurantTeamData.staff = restaurantTeamData.staff.map(m => m.id === member.id ? { ...m, ...updated } : m);
+  staffEditDraft = null;
+  showOrderToast(input.isActive ? "Staff details saved." : "Restaurant access disabled.", "success");
+  await loadRestaurantTeam();
+  return true;
+}
+async function saveStaffEdit(event) {
+  event.preventDefault();
+  const draft = staffEditDraft;
+  if (!draft || staffMutationBusy || !teamFenceMatches(draft.fence)) return;
+  const member = restaurantTeamData.staff.find(m => m.id === draft.id);
+  if (!canEditStaff(member)) return;
+  draft.name = event.currentTarget.elements.displayName.value.trim();
+  draft.role = event.currentTarget.elements.role.value;
+  if (!draft.name || draft.name.length > 100 || !EDITABLE_STAFF_ROLES.includes(draft.role)) {
+    draft.error = "Enter a staff name of up to 100 characters and choose a role."; renderRestaurantTeam(); return;
+  }
+  staffMutationBusy = true; renderRestaurantTeam();
+  try { await applyStaffUpdate(member, { displayName: draft.name, role: draft.role, isActive: member.is_active !== false, expectedVersion: draft.version }, draft.fence); }
+  catch (error) { if (teamFenceMatches(draft.fence)) { draft.error = teamErrorMessage(error); setRestaurantTeamError(draft.error); } }
+  finally { if (teamFenceMatches(draft.fence)) { staffMutationBusy = false; renderRestaurantTeam(); } }
+}
+async function toggleStaffAccess(id) {
+  if (staffMutationBusy) return;
+  const member = restaurantTeamData.staff.find(m => m.id === id);
+  if (!canEditStaff(member)) return;
+  const active = member.is_active === false;
+  if (!window.confirm(active ? `Reactivate access for ${member.display_name || member.email}?` : `Disable ${member.display_name || member.email} for this restaurant? Their history and access to other restaurants will be kept.`)) return;
+  const fence = teamFence(); staffMutationBusy = true; staffEditDraft = null; setRestaurantTeamError(""); renderRestaurantTeam();
+  try { await applyStaffUpdate(member, { displayName: member.display_name || "Staff", role: member.role, isActive: active, expectedVersion: member.version }, fence); }
+  catch (error) { if (teamFenceMatches(fence)) setRestaurantTeamError(teamErrorMessage(error)); }
+  finally { if (teamFenceMatches(fence)) { staffMutationBusy = false; renderRestaurantTeam(); } }
+}
+async function loadRestaurantTeam() {
+  if (!staffUser?.restaurantId || !["owner", "manager", "platform_admin"].includes(staffUser.role)) return;
+  const fence = teamFence(), epoch = ++teamRequestEpoch;
+  setRestaurantTeamError("");
+  try {
+    const data = await window.TableOrderCloud.listRestaurantTeam(fence.restaurantId);
+    if (!teamFenceMatches(fence) || epoch !== teamRequestEpoch) return;
+    restaurantTeamData = { staff: Array.isArray(data.staff) ? data.staff : [], invites: Array.isArray(data.invites) ? data.invites : [] };
+    renderRestaurantTeam();
+  } catch (error) { if (teamFenceMatches(fence) && epoch === teamRequestEpoch) setRestaurantTeamError(teamErrorMessage(error)); }
+}
 async function createRestaurantTeamInvite(event) {
   event.preventDefault();
   const button = document.getElementById("createRestaurantInvite");
-  button.disabled = true;
-  setRestaurantTeamError("");
+  if (button.disabled || !["owner", "manager", "platform_admin"].includes(staffUser?.role)) return;
+  const fence = teamFence(); button.disabled = true; setRestaurantTeamError("");
+  const input = { email: document.getElementById("restaurantInviteEmail").value.trim(), role: document.getElementById("restaurantInviteRole").value,
+    displayName: document.getElementById("restaurantInviteName").value.trim() };
+  const signature = JSON.stringify([fence, input]);
+  if (inviteRequestId?.signature !== signature) inviteRequestId = { signature, id: window.crypto.randomUUID() };
+  const attempt = inviteRequestId;
   try {
-    const invite = await window.TableOrderCloud.createRestaurantInvite(
-      staffUser.restaurantId,
-      document.getElementById("restaurantInviteEmail").value.trim(),
-      document.getElementById("restaurantInviteRole").value
-    );
-    restaurantTeamData.invites = [{ ...invite }, ...restaurantTeamData.invites.filter((entry) => entry.email !== invite.email)];
-    renderRestaurantTeam();
-    await copyText(restaurantInviteLink(invite.token));
-    document.getElementById("restaurantInviteEmail").value = "";
-    showOrderToast("Invite link created and copied.", "success");
-  } catch (error) { setRestaurantTeamError(error.message); }
-  finally { button.disabled = false; }
+    const response = await window.TableOrderCloud.sendStaffInvitation(fence.restaurantId, { ...input, requestId: attempt.id });
+    if (!teamFenceMatches(fence)) return;
+    if (response?.status !== "accepted") throw new Error("INVITATION_UNAVAILABLE");
+    inviteRequestId = null;
+    await loadRestaurantTeam();
+    showOrderToast(response.delivery === "requested" ? "Invitation email requested. Ask your staff member to check their inbox." : "Invitation saved. Email delivery could not be confirmed; wait 60 seconds before retrying, or copy the pending invitation link.", response.delivery === "requested" ? "success" : "warning");
+  } catch (error) { if (teamFenceMatches(fence)) setRestaurantTeamError(teamErrorMessage(error)); }
+  finally { if (teamFenceMatches(fence)) button.disabled = false; }
 }
 
 async function loadCloudDataIntoApp(options = {}) {
@@ -4478,11 +4556,44 @@ function updateInviteAuthMode(mode) {
   setInviteAuthError("");
 }
 
+let acceptedStaffInvite = null;
+function showInvitePasswordSetup() {
+  showInviteAuth();
+  document.getElementById("inviteAuthForm").classList.add("hidden");
+  document.getElementById("invitePasswordSetupForm").classList.remove("hidden");
+  document.getElementById("inviteAuthTitle").textContent = "Your restaurant invitation is accepted";
+  document.getElementById("inviteAuthDescription").textContent = "Choose your own password, or keep your existing password and continue. This is your Aveniq password across all restaurants. Your Owner cannot see it.";
+}
+async function finishStaffInvite(setPassword) {
+  const context = acceptedStaffInvite;
+  if (!context || invitePasswordBusy) return;
+  invitePasswordBusy = true;
+  const password = document.getElementById("inviteSetupPassword"), confirm = document.getElementById("inviteSetupConfirm");
+  document.getElementById("saveInvitePassword").disabled = true;
+  document.getElementById("skipInvitePassword").disabled = true;
+  try {
+    const session = await window.TableOrderCloud.verifyInvitationSession();
+    if (!acceptedStaffInvite || acceptedStaffInvite !== context || session.user.id !== context.userId) throw new Error("Please sign in again.");
+    if (setPassword) {
+      if (password.value.length < 8) throw new Error("Use at least 8 characters.");
+      if (password.value !== confirm.value) throw new Error("Passwords do not match.");
+      await window.TableOrderCloud.setInvitationPassword(password.value);
+    }
+    if (acceptedStaffInvite !== context || (await window.TableOrderCloud.getSession())?.user?.id !== context.userId) return;
+    password.value = ""; confirm.value = "";
+    window.location.href = `/dashboard/${encodeURIComponent(context.slug)}/dashboard`;
+  } catch (error) { setInviteAuthError(/match|8 characters/.test(error.message) ? error.message : "We could not finish account setup. Please sign in again or try password recovery."); }
+  finally { invitePasswordBusy = false; document.getElementById("saveInvitePassword").disabled = false; document.getElementById("skipInvitePassword").disabled = false; }
+}
+let invitePasswordBusy = false;
+
 async function acceptCurrentRestaurantInvite() {
   const token = window.TableOrderCloud.routeContext().inviteToken;
   if (!token) throw new Error("This invitation link is incomplete.");
+  await window.TableOrderCloud.verifyInvitationSession();
   const accepted = await window.TableOrderCloud.acceptRestaurantInvite(token);
-  window.location.href = `/dashboard/${encodeURIComponent(accepted.restaurant_slug)}/dashboard`;
+  acceptedStaffInvite = { userId: (await window.TableOrderCloud.getSession()).user.id, slug: accepted.restaurant_slug };
+  showInvitePasswordSetup();
 }
 
 async function handleInviteAuth(event) {
@@ -4506,7 +4617,7 @@ async function handleInviteAuth(event) {
     }
     await acceptCurrentRestaurantInvite();
   } catch (error) {
-    setInviteAuthError(/invalid login credentials/i.test(error.message) ? "Email or password is incorrect." : error.message);
+    setInviteAuthError(/invalid login credentials/i.test(error.message) ? "Email or password is incorrect." : "We could not accept this invitation. Check the invited email address, or ask your restaurant Owner for a new invitation.");
   } finally {
     button.disabled = false;
   }
@@ -4918,8 +5029,9 @@ async function initializeAccountFlow() {
         return;
       } catch (error) {
         await window.TableOrderCloud.signOut().catch(() => {});
-        showInviteAuth(error.message);
+        showInviteAuth();
         updateInviteAuthMode("login");
+        setInviteAuthError("This invitation is invalid, has expired or cannot be used by this account. Ask your restaurant Owner for a new invitation, or sign in with the email it was sent to.");
         return;
       }
     }
@@ -4959,6 +5071,8 @@ function bindGlobalActions() {
     if (APP_ROUTE.area === "forgot-password" && (passwordRecoveryRequestPending || window.TableOrderCloud.getPasswordRecoveryCooldown())) event.preventDefault();
   });
   document.getElementById("ownerAuthForm").addEventListener("submit", handleOwnerAuth);
+  document.getElementById("invitePasswordSetupForm").addEventListener("submit", event => { event.preventDefault(); finishStaffInvite(true); });
+  document.getElementById("skipInvitePassword").addEventListener("click", () => finishStaffInvite(false));
   document.getElementById("inviteAuthForm").addEventListener("submit", handleInviteAuth);
   document.getElementById("toggleInviteAuthMode").addEventListener("click", () => updateInviteAuthMode(inviteAuthMode === "signup" ? "login" : "signup"));
   document.getElementById("platformRestaurantForm").addEventListener("submit", createPlatformRestaurant);

@@ -1,0 +1,28 @@
+# Staff Management deployment and recovery plan
+
+This PR is a review candidate only. No hosted Supabase project has been connected to, queried or modified for this feature. No function/frontend deployment, Netlify change, migration application or Production staff operation has been performed.
+
+## Complete SQL and compatibility
+
+Review the complete append-only migration `supabase/migrations/20261018044445_staff_management.sql`, plus `docs/staff-management-backend.md` for the RPC/RLS matrix and `docs/staff-management-security-review.md` for independent review. It adds membership display name/active/version/update time, invitation reservation fields and an audit table; replaces authoritative membership helpers, hardened invitation RPCs, and direct Kitchen/payment role readers. Existing memberships default active. Existing IDs, historical associations, orders and QR hashes are preserved. No existing migration file, pinned Auth SDK, dependency lockfile, service worker or Netlify configuration is changed. The only additional runtime configuration is function-only public origin/key settings and separately reviewed Auth redirect support.
+
+## Separate Production approval required
+
+1. Freeze the reviewed commit and record the current locked frontend deploy and rollback source. Obtain explicit approval for the exact SQL, function publication/configuration and frontend deployment. This feature approval is not permission to apply Production SQL.
+2. Under that later approval, capture read-only Production schema/function/ACL/RLS definitions. Compare every replaced signature/body and grant to the approved baseline; stop for catalog drift. Verify Auth email delivery/redirect configuration and signup policy support. Do not disable gateway JWT verification, RLS, email confirmation or security controls to make it work.
+3. Rehearse the migration and API tests in an isolated non-production environment. Confirm migration transaction atomicity and backup/recovery posture. Preserve all active/disabled membership state and audit data.
+4. Apply the approved additive database migration first. Verify no unauthenticated or direct membership writes; active-role predicates apply across RLS/reporting/Kitchen/payment and invitation acceptance. Verify historical ID/order/QR fingerprints without logging raw public QR tokens.
+5. Publish the staff-invite Edge function only after a separate deployment approval, with exact AVENIQ_APP_ORIGIN, existing public API key, and trusted Supabase internal origin. No service-role, secret key, custom SMTP credential or Auth-admin provisioning permission is needed. Keep default gateway JWT verification enabled; the handler also checks Auth /user and caller-JWT database authorization.
+6. Approve allowlisted /join/* recipient callbacks if not already present. The configured SMTP/email provider must support Supabase Auth one-time email links. Do not initiate recipient PKCE in the Owner browser. Do not change the existing PKCE recovery callback or verifier semantics.
+7. Build the exact reviewed frontend using its existing public configuration, scan the complete artifact, stage and verify it, then publish/lock only under explicit frontend deployment approval. Record exact commit and deploy IDs. Hard-refresh verification clients if old assets remain cached.
+8. Live acceptance must use an explicitly designated synthetic tenant/accounts: new/existing recipient email receipt, recipient password setup or existing password retention, Owner edit/disable/reactivate, Manager invitations, Staff denial, retained-JWT denied access, other-tenant access, history and public QR compatibility. Do not mutate real customer staff/accounts as a smoke test. Stop if any gate fails.
+
+## Recovery
+
+Before publication, stop with the existing release unchanged if any gate fails. For email transport trouble, stop new invitations or disable the endpoint/UI; preserve pending reservations because delivery may have occurred. Resend is shared-cooldown gated and a repeated request ID never sends twice.
+
+After backend migration, never revert active-membership checks to their old definitions: that would re-enable disabled access. A frontend rollback may hide the new controls, but must leave suspension enforcement, invalidated invitations and audit records intact. Use a reviewed forward patch for backend defects; do not drop columns/audit, reset data, globally ban/delete Auth users, replace membership IDs or rewrite historical records. Do not automatically reactivate members or replay accepted invitations. Any Production recovery action needs explicit approval.
+
+## Verification boundary
+
+Browser screenshots use synthetic localhost fixtures. Database/API tests use actual disposable local Docker Postgres, GoTrue and PostgREST. SMTP integration captures actual local email and consumes real local Auth links; it invokes the same endpoint handler under Node. The Deno wrapper is packaged offline using the installed Supabase Edge runtime image with network disabled. A hosted Edge deployment and live email-provider acceptance have deliberately not been performed; these are later deployment gates, not claims made by this Draft PR.
