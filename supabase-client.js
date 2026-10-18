@@ -333,10 +333,11 @@
   async function getMemberships() {
     const session = await getSession();
     if (!session?.user?.id) return [];
-    return request(
-      `restaurant_staff?select=id,restaurant_id,role,restaurants(id,slug,name,status)&user_id=eq.${encodeURIComponent(session.user.id)}`,
+    const rows = await request(
+      `restaurant_staff?select=id,restaurant_id,role,is_active,display_name,version,restaurants(id,slug,name,status)&is_active=eq.true&user_id=eq.${encodeURIComponent(session.user.id)}`,
       { accessToken: session.access_token }
     );
+    return rows.filter(row => row.is_active !== false);
   }
 
   async function getStaffProfile() {
@@ -361,6 +362,7 @@
     return {
       id: session.user.id,
       email: session.user.email || "Staff",
+      displayName: membership.display_name || "",
       restaurantId: membership.restaurant_id,
       restaurantSlug: related?.slug || slug,
       restaurantName: related?.name || "Restaurant",
@@ -424,12 +426,41 @@
     });
   }
 
-  async function createRestaurantInvite(restaurantId, email, role) {
+  function updateRestaurantStaff(restaurantId, membershipId, input) {
+    const name = String(input.displayName || "").trim();
+    if (!name || name.length > 100) throw new Error("Enter a staff name of up to 100 characters.");
+    if (!["manager", "staff", "kitchen", "cashier"].includes(input.role)) throw new Error("Choose an available staff role.");
+    if (typeof input.isActive !== "boolean" || !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) throw new Error("Refresh the team list before saving.");
+    return request("rpc/update_restaurant_staff", { method: "POST", body: JSON.stringify({
+      p_restaurant_id: restaurantId, p_membership_id: membershipId, p_display_name: name,
+      p_role: input.role, p_is_active: input.isActive, p_expected_version: input.expectedVersion
+    }) });
+  }
+
+  async function sendStaffInvitation(restaurantId, input) {
     const session = await getSession();
-    return request("rpc/create_restaurant_invite", {
-      method: "POST", accessToken: session?.access_token,
-      body: JSON.stringify({ p_restaurant_id: restaurantId, p_email: email, p_role: role })
+    if (!session) throw new Error("Please sign in again.");
+    const response = await fetch(`${config.url}/functions/v1/staff-invite`, {
+      method: "POST", headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ restaurantId, email: String(input.email || "").trim().toLowerCase(), displayName: String(input.displayName || "").trim(), role: input.role, requestId: input.requestId })
     });
+    return parseResponse(response);
+  }
+
+  async function verifyInvitationSession() {
+    const session = await getSession();
+    if (!session?.access_token) throw new Error("Please sign in to accept this invitation.");
+    const user = await authRequest("user", { accessToken: session.access_token });
+    if (!user?.id || (session.user?.id && user.id !== session.user.id)) throw new Error("Please sign in again.");
+    return storeSession({ ...session, user });
+  }
+
+  async function setInvitationPassword(password) {
+    if (typeof password !== "string" || password.length < 8) throw new Error("Use at least 8 characters.");
+    const session = await verifyInvitationSession();
+    const user = await authRequest("user", { method: "PUT", accessToken: session.access_token, body: JSON.stringify({ password }) });
+    if (user?.id !== session.user.id) throw new Error("Password confirmation was not received. Please sign in again.");
+    return true;
   }
 
   async function acceptRestaurantInvite(token) {
@@ -762,6 +793,6 @@
     requestPasswordRecovery, getPasswordRecoveryCooldown, consumePasswordRecovery, updatePassword, signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, getPlatformDashboardProfile, signOut,
     loadPlatformRestaurants, platformCreateRestaurant,
     createRestaurant, createTables, importSampleMenu, completeOnboarding,
-    createRestaurantInvite, acceptRestaurantInvite, listRestaurantTeam, revokeRestaurantInvite
+    updateRestaurantStaff, sendStaffInvitation, verifyInvitationSession, setInvitationPassword, acceptRestaurantInvite, listRestaurantTeam, revokeRestaurantInvite
   };
 })();

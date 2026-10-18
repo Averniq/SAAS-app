@@ -71,9 +71,15 @@
         <form class="auth-form" id="inviteAuthForm">
           <label class="field"><span>Email address</span><input id="inviteEmail" type="email" autocomplete="email" required placeholder="you@restaurant.com" /></label>
           <label class="field"><span>Password</span><input id="invitePassword" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters" /></label>
-          <p class="auth-error hidden" id="inviteAuthError" role="alert"></p>
           <button class="submit-button" id="inviteAuthSubmit" type="submit">Create account and join</button>
           <button class="ghost-button" id="toggleInviteAuthMode" type="button">I already have an account</button>
+        </form>
+        <p class="auth-error hidden" id="inviteAuthError" role="alert"></p>
+        <form class="auth-form hidden" id="invitePasswordSetupForm">
+          <label class="field"><span>New password</span><input id="inviteSetupPassword" type="password" autocomplete="new-password" minlength="8" required /></label>
+          <label class="field"><span>Confirm password</span><input id="inviteSetupConfirm" type="password" autocomplete="new-password" minlength="8" required /></label>
+          <button class="submit-button" id="saveInvitePassword" type="submit">Save password and continue</button>
+          <button class="ghost-button" id="skipInvitePassword" type="button">Keep existing password / continue</button>
         </form>
       </section>
 
@@ -374,20 +380,22 @@
             <div class="panel-title">
               <div>
                 <p class="eyebrow">Access and roles</p>
-                <h2>Restaurant Team</h2>
-                <p class="muted">Invite each person with only the access they need.</p>
+                <h2>Staff Management</h2>
+                <p class="muted">Invite your team and manage their access to this restaurant. Existing history is kept.</p>
               </div>
               <button class="ghost-button" id="refreshRestaurantTeam" type="button">Refresh</button>
             </div>
             <form class="team-invite-form" id="restaurantInviteForm">
+              <label class="field"><span>Staff name</span><input id="restaurantInviteName" required maxlength="100" placeholder="e.g. Alex Chen" /></label>
               <label class="field"><span>Email address</span><input id="restaurantInviteEmail" type="email" required placeholder="staff@restaurant.com" /></label>
-              <label class="field"><span>Role</span><select id="restaurantInviteRole"><option value="staff">All-round Staff</option><option value="manager">Manager</option><option value="kitchen">Kitchen</option><option value="cashier">Cashier</option><option value="owner">Owner</option></select></label>
-              <button class="primary-button" id="createRestaurantInvite" type="submit">Create invite link</button>
+              <label class="field"><span>Role</span><select id="restaurantInviteRole"><option value="staff">All-round Staff</option><option value="manager">Manager</option><option value="kitchen">Kitchen</option><option value="cashier">Cashier</option></select></label>
+              <button class="primary-button" id="createRestaurantInvite" type="submit">Send invitation</button>
             </form>
             <p class="auth-error hidden" id="restaurantTeamError" role="alert"></p>
             <div class="team-columns">
               <div><h3>Active team</h3><div class="team-list" id="restaurantTeamList"><div class="empty-state">Loading team…</div></div></div>
-              <div><h3>Pending invites</h3><div class="team-list" id="restaurantInviteList"><div class="empty-state">No pending invites.</div></div></div>
+              <div><h3>Disabled team</h3><div class="team-list" id="disabledRestaurantTeamList"><div class="empty-state">No disabled team members.</div></div></div>
+              <div><h3>Pending invitations</h3><div class="team-list" id="restaurantInviteList"><div class="empty-state">No pending invites.</div></div></div>
             </div>
           </section>
 

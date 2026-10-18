@@ -442,7 +442,7 @@
   .database-status.error .status-dot { background: var(--accent); }
   .database-actions { @apply mt-3; }
   .team-panel { border-left: 4px solid var(--mint); }
-  .team-invite-form { @apply mt-5 grid items-end gap-3; grid-template-columns: minmax(220px,1fr) minmax(150px,190px) auto; }
+  .team-invite-form { @apply mt-5 grid items-end gap-3; grid-template-columns: repeat(2,minmax(0,1fr)) minmax(150px,190px) auto; }
   .team-invite-form input, .team-invite-form select { @apply max-w-none; }
   .team-columns { @apply mt-6 grid grid-cols-2 gap-5; }
   .team-columns h3 { @apply mb-3; }
@@ -905,3 +905,10 @@ body.account-flow-active > .app-header, body.account-flow-active > .tabs, body.a
 .table-rename-form { display: grid; gap: .5rem; margin-top: .75rem; max-width: 32rem; }
 .table-rename-form input { width: 100%; min-width: 0; }
 .table-admin-row > div { min-width: 0; overflow-wrap: anywhere; }
+
+.staff-edit-form { display: grid; gap: .75rem; grid-column: 1 / -1; min-width: 0; }
+.staff-edit-form input, .staff-edit-form select { width: 100%; min-width: 0; }
+.team-row strong, .team-row span { overflow-wrap: anywhere; }
+.team-row-actions .ghost-button { min-height: 44px; }
+@media (max-width: 1100px) { .team-invite-form { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .team-invite-form, .team-columns { grid-template-columns: 1fr; } }
