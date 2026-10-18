@@ -2476,7 +2476,7 @@ function renderKitchen() {
           <div class="order-card-header">
             <div>
               <p class="eyebrow">Order #${order.number}</p>
-              <h3>${table?.name || "Table"}</h3>
+              <h3>${escapeHtml(table?.name || "Table")}</h3>
               <p class="muted">${order.createdLabel}</p>
               <p class="cloud-order-state ${order.cloudStatus || "local"}">${order.cloudStatus === "synced" ? "Cloud synced" : order.cloudStatus === "syncing" ? "Cloud syncing" : "Local only"}</p>
             </div>
@@ -2506,7 +2506,7 @@ function renderFrontDesk() {
       const count = openOrdersForTable(table.id).length;
       return `
         <button class="table-button ${table.id === selectedFrontTableId ? "active" : ""}" data-front-table="${table.id}">
-          ${table.name}
+          ${escapeHtml(table.name)}
           <p class="muted">${count} open order${count === 1 ? "" : "s"} - ${money(tableTotal(table.id))}</p>
         </button>
       `;
@@ -2566,7 +2566,7 @@ function renderInvoice() {
       <div class="invoice-header">
         <div>
           <p class="eyebrow">Invoice</p>
-          <h2>${table.name}</h2>
+          <h2>${escapeHtml(table.name)}</h2>
         </div>
       </div>
       <div class="empty-state">No open orders for this table.</div>
@@ -2578,7 +2578,7 @@ function renderInvoice() {
     <div class="invoice-header">
       <div>
         <p class="eyebrow">Invoice</p>
-        <h2>${table.name}</h2>
+        <h2>${escapeHtml(table.name)}</h2>
         <p class="muted">${escapeHtml(profile.name)} - ABN ${escapeHtml(profile.taxId || "N/A")}</p>
         <p class="muted">${escapeHtml(profile.address || "")}</p>
       </div>
@@ -3042,7 +3042,84 @@ function renderSetup() {
   });
 }
 
+let tableRenameDraft = null;
+
+function canRenameTable(table) {
+  return Boolean(staffUser?.id && ["owner", "manager"].includes(staffUser.role)
+    && staffUser.restaurantId === restaurant().cloudId && table?.cloudId);
+}
+
+function tableRenameIsCurrent(draft) {
+  const table = allTables().find((entry) => entry.id === draft?.tableId);
+  return Boolean(draft && tableRenameDraft === draft && canRenameTable(table)
+    && staffUser.id === draft.userId && staffUser.role === draft.role
+    && staffUser.restaurantId === draft.restaurantId && qrSessionGeneration === draft.generation
+    && table.cloudId === draft.cloudId);
+}
+
+function startTableRename(tableId) {
+  if (tableRenameDraft?.busy) return;
+  const table = allTables().find((entry) => entry.id === tableId);
+  if (!canRenameTable(table)) return;
+  tableRenameDraft = { tableId, cloudId: table.cloudId, userId: staffUser.id,
+    restaurantId: staffUser.restaurantId, role: staffUser.role, generation: qrSessionGeneration,
+    name: table.name, error: "", busy: false };
+  renderTableAdmin();
+  document.getElementById("tableRenameInput")?.focus?.();
+}
+
+function cancelTableRename() {
+  if (tableRenameDraft?.busy) return;
+  tableRenameDraft = null;
+  renderTableAdmin();
+}
+
+async function saveTableRename(event) {
+  event.preventDefault();
+  const draft = tableRenameDraft;
+  if (!tableRenameIsCurrent(draft) || draft.busy) return;
+  draft.name = event.currentTarget.elements.tableDisplayName.value.trim();
+  if (!draft.name) {
+    draft.error = "Enter a table name.";
+    renderTableAdmin();
+    document.getElementById("tableRenameInput")?.focus?.();
+    return;
+  }
+  draft.busy = true;
+  draft.error = "";
+  renderTableAdmin();
+  try {
+    const rows = await window.TableOrderCloud.updateRestaurantTable(draft.cloudId,
+      { name: draft.name }, draft.restaurantId, { returnRepresentation: true });
+    if (!tableRenameIsCurrent(draft)) return;
+    const row = rows?.length === 1 ? rows[0] : null;
+    if (!row || row.id !== draft.cloudId || row.local_id !== draft.tableId || row.restaurant_id !== draft.restaurantId
+        || row.name !== draft.name || row.table_name !== draft.name) {
+      throw new Error("The table update was not confirmed.");
+    }
+    // Change the label only. IDs, order associations and retained QR originals stay intact.
+    allTables().find((entry) => entry.id === draft.tableId).name = row.table_name;
+    tableRenameDraft = null;
+    ++reportRequestId;
+    reportLoading = false;
+    reportDashboard = null;
+    reportData = {};
+    reportError = "";
+    saveState();
+    render();
+    showOrderToast("Table name saved. Existing QR codes still work.", "success");
+  } catch {
+    if (tableRenameIsCurrent(draft)) draft.error = "The table name could not be saved. Check your access and try again.";
+  } finally {
+    if (tableRenameDraft === draft) {
+      draft.busy = false;
+      renderTableAdmin();
+    }
+  }
+}
+
 function renderTableAdmin() {
+  if (tableRenameDraft && !tableRenameIsCurrent(tableRenameDraft)) tableRenameDraft = null;
   const list = document.getElementById("tableAdminList");
   list.innerHTML = allTables()
     .map((table) => {
@@ -3051,9 +3128,20 @@ function renderTableAdmin() {
         <div class="table-admin-row">
           <div>
             <strong>${escapeHtml(table.name)}</strong>
+            ${tableRenameDraft?.tableId === table.id ? `<form data-table-rename-form class="table-rename-form">
+              <label for="tableRenameInput">Table display name</label>
+              <input id="tableRenameInput" name="tableDisplayName" value="${escapeHtml(tableRenameDraft.name)}" ${tableRenameDraft.busy ? "disabled" : ""} aria-describedby="tableRenameHelp tableRenameError">
+              <p id="tableRenameHelp" class="muted">Existing QR codes and orders stay linked to this table. Duplicate display names are allowed.</p>
+              <p id="tableRenameError" role="alert">${escapeHtml(tableRenameDraft.error)}</p>
+              <div class="status-buttons">
+                <button type="submit" class="primary-button" ${tableRenameDraft.busy ? "disabled" : ""}>${tableRenameDraft.busy ? "Saving…" : "Save"}</button>
+                <button type="button" class="ghost-button" data-cancel-table-rename ${tableRenameDraft.busy ? "disabled" : ""}>Cancel</button>
+              </div>
+            </form>` : ""}
             <p class="muted">${issuedQrUrl(table) ? "Current token QR is available in this session." : hasUnrecoverablePublicQrToken(table) ? "An active QR exists. Reprint from your saved QR package. If it is missing, contact your administrator before rotating." : "No QR generated in this session."}</p>
           </div>
           <span class="status-buttons">
+            ${canRenameTable(table) ? `<button type="button" class="ghost-button" data-rename-table="${escapeHtml(table.id)}" ${tableRenameDraft?.busy ? "disabled" : ""}>Rename</button>` : ""}
             <button class="ghost-button" data-copy-table="${table.id}">Copy</button>
             <button class="ghost-button" data-reset-token="${table.id}" ${canManagePublicQrTokens() ? "" : "disabled"}>${qrCardActionLabel(table)}</button>
             <button class="ghost-button" data-delete-table="${table.id}" ${hasOpenOrders || allTables().length === 1 ? "disabled" : ""}>Delete</button>
@@ -3062,6 +3150,17 @@ function renderTableAdmin() {
       `;
     })
     .join("");
+
+  list.querySelectorAll("[data-rename-table]").forEach((button) => {
+    button.addEventListener("click", () => startTableRename(button.dataset.renameTable));
+  });
+  list.querySelectorAll("[data-table-rename-form]").forEach((form) => {
+    form.addEventListener("submit", saveTableRename);
+    form.elements.tableDisplayName.addEventListener("input", (event) => {
+      if (tableRenameDraft && !tableRenameDraft.busy) tableRenameDraft.name = event.target.value;
+    });
+  });
+  list.querySelectorAll("[data-cancel-table-rename]").forEach((button) => button.addEventListener("click", cancelTableRename));
 
   list.querySelectorAll("[data-copy-table]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -3240,7 +3339,7 @@ function printInvoice(tableId) {
   const tax = orders.reduce((sum, order) => sum + orderTax(order), 0);
   const total = orders.reduce((sum, order) => sum + orderTotal(order), 0);
   setPrintContent(`
-    <h2>${table.name}</h2>
+    <h2>${escapeHtml(table.name)}</h2>
     <p>${escapeHtml(profile.name)}</p>
     <p>${escapeHtml(profile.address || "")}</p>
     <p>${escapeHtml(profile.phone || "")}</p>
@@ -3330,7 +3429,7 @@ function renderPrintOrder(order, title) {
     <h2>${title}</h2>
     <p>${escapeHtml(profile.name)}</p>
     <p>Order #${order.number}</p>
-    <p>${table?.name || "Table"} - ${order.createdLabel}</p>
+    <p>${escapeHtml(table?.name || "Table")} - ${order.createdLabel}</p>
     <hr>
     ${order.items
       .map((item) => `<p><strong>${item.quantity} x</strong> ${escapeHtml(item.name)}<br>${escapeHtml(optionSummary(item.options) || "No options")}</p>`)
