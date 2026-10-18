@@ -7,6 +7,7 @@ let calls=[],response={};const saved=new Map([['aveniq-owner-session',JSON.strin
 const window={TABLEORDER_SUPABASE:{url:'http://127.0.0.1:54321',publishableKey:'synthetic-public'},localStorage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v),removeItem:k=>saved.delete(k)},location:{pathname:'/dashboard/local/setup',search:''}};
 vm.runInNewContext(src,{window,URLSearchParams,fetch:async(url,options)=>{calls.push({url,options});return {ok:true,text:async()=>JSON.stringify(response)}}});
 const cloud=window.TableOrderCloud;
+assert.equal(cloud.createRestaurantInvite,undefined,'Browser must not expose a raw-token invitation reservation adapter');
 assert.equal(typeof cloud.updateRestaurantStaff,'function','Staff edits require a tenant-scoped RPC adapter');
 response={id:'member',user_id:'target',restaurant_id:'tenant',display_name:'Patio staff',role:'staff',is_active:true,version:2};
 await cloud.updateRestaurantStaff('tenant','member',{displayName:'  Patio staff  ',role:'staff',isActive:true,expectedVersion:1});

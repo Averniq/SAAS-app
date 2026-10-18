@@ -3,7 +3,7 @@ import {spawnSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import vm from 'node:vm';
 import {createStaffInviteHandler} from '../supabase/functions/staff-invite/handler.mjs';
-import {runLocalGate,withLocalBrowserCredentials,cleanupLocalGate,withLocalGateDatabase} from '../scripts/run-local-supabase-integration-gate.mjs';
+import {runLocalGate,withLocalBrowserCredentials,cleanupLocalGate,withLocalGateDatabase,withLocalGateServerCredentials} from '../scripts/run-local-supabase-integration-gate.mjs';
 const docker=(args,input)=>{const r=spawnSync('docker',args,{input,encoding:'utf8',timeout:60000});assert.equal(r.status,0,'local Docker command failed');return r.stdout.trim()};
 const quote=x=>"'"+String(x).replaceAll("'","''")+"'";
 let checks=0;const pass=label=>{checks++;console.log('PASS '+label)};
@@ -11,13 +11,20 @@ try {
  await runLocalGate({emailCapture:true});
  const db = await withLocalGateDatabase(name => name);
  const sql=q=>docker(['exec','-e','PGPASSWORD=postgres','-i',db,'psql','-X','-qAt','-U','supabase_admin','-d','postgres','-v','ON_ERROR_STOP=1'],q);
+ await withLocalGateServerCredentials(async({serverKey})=>{
  await withLocalBrowserCredentials(async({appUrl,ownerEmail,password,mailUrl})=>{
   for(const url of [appUrl,mailUrl])assert.equal(new URL(url).hostname,'127.0.0.1');
   const window={};vm.runInNewContext(await(await fetch(appUrl+'/supabase-config.js')).text(),{window});const key=window.TABLEORDER_SUPABASE.publishableKey;
   const api=async(path,token,body,method='POST')=>{const r=await fetch(appUrl+path,{method,headers:{apikey:key,...(token?{Authorization:'Bearer '+token}:{}),'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,data:await r.json()}};
   const login=async(email,pw=password)=>api('/auth/v1/token?grant_type=password',null,{email,password:pw});
   const owner=await login(ownerEmail);assert.equal(owner.status,200);const sake=sql("select id from public.restaurants where slug='sake-street'");
-  const handler=createStaffInviteHandler({supabaseUrl:appUrl,publicKey:key,appOrigin:appUrl});
+  const deniedReservation={p_restaurant_id:sake,p_email:'direct-not-sent@staff.local',p_role:'staff',p_display_name:'Direct RPC denied',p_request_id:randomUUID()};
+  const noDeliveryBefore=await (await fetch(mailUrl+'/api/v1/messages')).json();
+  for(const [name,args] of [['create_staff_invitation',deniedReservation],['reserve_staff_invitation_for_delivery',{...deniedReservation,p_actor_user_id:owner.data.user.id}]]){
+   const direct=await api('/rest/v1/rpc/'+name,owner.data.access_token,args);assert.ok(direct.status>=400);assert.ok(!direct.data?.token);
+  }
+  const noDeliveryAfter=await (await fetch(mailUrl+'/api/v1/messages')).json();assert.equal((noDeliveryAfter.messages||[]).length,(noDeliveryBefore.messages||[]).length);pass('ordinary Owner JWT cannot call token-returning creators or bypass email transport');
+  const handler=createStaffInviteHandler({supabaseUrl:appUrl,publicKey:key,serverKey,appOrigin:appUrl});
   const invite=async(email,token=owner.data.access_token,requestId=randomUUID())=>handler(new Request(appUrl+'/functions/v1/staff-invite',{method:'POST',headers:{Authorization:'Bearer '+token,Origin:appUrl,'Content-Type':'application/json'},body:JSON.stringify({restaurantId:sake,requestId,email,role:'staff',displayName:'Synthetic recipient'})}));
   const emails=async()=>{const r=await fetch(mailUrl+'/api/v1/messages');assert.equal(r.status,200);return (await r.json()).messages||[]};
   const capture=async(email)=>{for(let i=0;i<30;i++){const list=await emails();const m=list.find(m=>m.To?.some(t=>t.Address===email));if(m){const full=await(await fetch(mailUrl+'/api/v1/message/'+m.ID)).json();const text=(full.HTML||full.Text||'').replaceAll('&amp;','&');const link=text.match(/https?:\/\/[^\s"<>]+\/auth\/v1\/verify\?[^\s"<>]+/)?.[0];assert.ok(link,'captured local verification link missing');return link;}await new Promise(r=>setTimeout(r,100));}throw Error('Local mail capture timeout')};
@@ -41,13 +48,14 @@ try {
   assert.equal(Number(sql('select count(*) from auth.users')),countBefore+1);pass('one missing Auth identity created and no duplicate existing identity');
   const staffLogin=await login(existing);const beforeDenied=(await emails()).length;const denied=await invite('not-sent@staff.local',staffLogin.data.access_token);assert.equal(denied.status,403);assert.equal((await emails()).length,beforeDenied);pass('Staff endpoint denial sends no email');
   const failEmail='failed-delivery@staff.local', failId=randomUUID();
-  const failHandler=createStaffInviteHandler({supabaseUrl:appUrl,publicKey:key,appOrigin:appUrl,fetch:async(url,options)=>String(url).includes('/auth/v1/otp')?Response.json({}, {status:429}):fetch(url,options)});
+  const failHandler=createStaffInviteHandler({supabaseUrl:appUrl,publicKey:key,serverKey,appOrigin:appUrl,fetch:async(url,options)=>String(url).includes('/auth/v1/otp')?Response.json({}, {status:429}):fetch(url,options)});
   const failResponse=await failHandler(new Request(appUrl+'/functions/v1/staff-invite',{method:'POST',headers:{Authorization:'Bearer '+owner.data.access_token,Origin:appUrl,'Content-Type':'application/json'},body:JSON.stringify({restaurantId:sake,requestId:failId,email:failEmail,role:'staff',displayName:'Synthetic failed delivery'})}));
   assert.equal((await failResponse.json()).delivery,'unconfirmed');
   const failRetry=await handler(new Request(appUrl+'/functions/v1/staff-invite',{method:'POST',headers:{Authorization:'Bearer '+owner.data.access_token,Origin:appUrl,'Content-Type':'application/json'},body:JSON.stringify({restaurantId:sake,requestId:failId,email:failEmail,role:'staff',displayName:'Synthetic failed delivery'})}));
   assert.equal((await failRetry.json()).delivery,'already_requested');assert.equal((await invite(failEmail)).status,429);pass('failed email reservation remains consumed and fresh requests remain cooldown-gated');
   const expiredAuth='expired-auth-mail@staff.local';assert.equal((await invite(expiredAuth)).status,202);const expiredAuthLink=await capture(expiredAuth);sql(`update auth.users set confirmation_sent_at=now()-interval '2 hours',recovery_sent_at=now()-interval '2 hours' where email=${quote(expiredAuth)}`);const expiredAuthResult=await consume(expiredAuthLink);assert.ok(!expiredAuthResult.params.get('access_token'));pass('expired Auth email token cannot establish a session');
   const expired='expired-mail@staff.local';const r=await invite(expired);assert.equal(r.status,202);const expiredLink=await capture(expired);const p=new URL(expiredLink);const callback=new URL(p.searchParams.get('redirect_to'));const inviteToken=callback.pathname.split('/')[2];sql(`update public.restaurant_invites set expires_at=now()-interval '1 minute' where token=${quote(inviteToken)}`);const session=await consume(expiredLink);assert.ok(session.params.get('access_token'));assert.ok((await accept(session.params.get('access_token'),inviteToken)).status>=400);pass('expired database invitation rejected with otherwise valid recipient session');
+ });
  });
  console.log('STAFF INVITATION LOCAL PASS '+checks);
 } catch(error) {console.error('STAFF INVITATION LOCAL FAILED: '+(error?.code||error?.name||'ERROR')+' '+(/^LOCAL_(SUPABASE_GATE_FAILED|CALLBACK_INVALID)/.test(String(error?.message||''))?error.message:'check assertion; credential details suppressed '+(String(error?.stack||'').split('\n').find(line=>line.includes('test-staff-invite-local.mjs:'))||'')));process.exitCode=1;} finally {await cleanupLocalGate()}

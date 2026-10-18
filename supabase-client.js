@@ -463,14 +463,6 @@
     return true;
   }
 
-  async function createRestaurantInvite(restaurantId, email, role) {
-    const session = await getSession();
-    return request("rpc/create_restaurant_invite", {
-      method: "POST", accessToken: session?.access_token,
-      body: JSON.stringify({ p_restaurant_id: restaurantId, p_email: email, p_role: role })
-    });
-  }
-
   async function acceptRestaurantInvite(token) {
     const session = await getSession();
     if (!session) throw new Error("Please sign in to accept this invitation.");
@@ -801,6 +793,6 @@
     requestPasswordRecovery, getPasswordRecoveryCooldown, consumePasswordRecovery, updatePassword, signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, getPlatformDashboardProfile, signOut,
     loadPlatformRestaurants, platformCreateRestaurant,
     createRestaurant, createTables, importSampleMenu, completeOnboarding,
-    updateRestaurantStaff, sendStaffInvitation, verifyInvitationSession, setInvitationPassword, createRestaurantInvite, acceptRestaurantInvite, listRestaurantTeam, revokeRestaurantInvite
+    updateRestaurantStaff, sendStaffInvitation, verifyInvitationSession, setInvitationPassword, acceptRestaurantInvite, listRestaurantTeam, revokeRestaurantInvite
   };
 })();

@@ -1,4 +1,4 @@
-// Public-key-only invitation transport. Authorization and resend reservation are transactional RPC concerns.
+// Caller authentication and email transport use the public key. Only the private reservation RPC uses the server credential.
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const roles = new Set(['manager', 'staff', 'kitchen', 'cashier']);
 function configuredUrl(value, originOnly = false) {
@@ -11,6 +11,10 @@ function isPublicKey(key) {
   if (typeof key !== 'string') return false;
   if (key.startsWith('sb_publishable_')) return true;
   try { return JSON.parse(atob(key.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).role === 'anon'; } catch { return false; }
+}
+function isServerKey(key) {
+  if (typeof key !== 'string') return false;
+  try { return JSON.parse(atob(key.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).role === 'service_role'; } catch { return false; }
 }
 async function readBody(request) {
   if (Number(request.headers.get('content-length')) > 4096) throw Error('body');
@@ -28,10 +32,12 @@ async function readBody(request) {
   for (const chunk of chunks) { bytes.set(chunk, position); position += chunk.length; }
   return JSON.parse(new TextDecoder().decode(bytes));
 }
-export function createStaffInviteHandler({supabaseUrl, publicKey, appOrigin, fetch: requestFetch = globalThis.fetch}) {
+export function createStaffInviteHandler({supabaseUrl, publicKey, serverKey, appOrigin, fetch: requestFetch = globalThis.fetch}) {
   const base = configuredUrl(supabaseUrl);
   const origin = configuredUrl(appOrigin, true);
   if (!isPublicKey(publicKey)) throw Error('Only a public Supabase key is permitted');
+  if (!isServerKey(serverKey)) throw Error('A server-only service-role reservation credential is required');
+  const serverHeaders = {apikey: serverKey, Authorization: `Bearer ${serverKey}`, 'Content-Type': 'application/json'};
   const publicHeaders = {apikey: publicKey, Authorization: `Bearer ${publicKey}`, 'Content-Type': 'application/json'};
   return async function staffInvite(request) {
     const requestOrigin = request.headers.get('Origin');
@@ -54,9 +60,9 @@ export function createStaffInviteHandler({supabaseUrl, publicKey, appOrigin, fet
     try {
       const auth = await requestFetch(`${base}/auth/v1/user`, {headers: callerHeaders, signal: AbortSignal.timeout(10000)});
       const user = auth.ok ? await auth.json() : null;
-      if (!user?.id) return reply(401, {error: 'SIGN_IN_REQUIRED'});
-      const reservation = await requestFetch(`${base}/rest/v1/rpc/create_staff_invitation`, {method: 'POST', headers: callerHeaders, signal: AbortSignal.timeout(10000), body: JSON.stringify({
-        p_restaurant_id: input.restaurantId, p_email: input.email.trim().toLowerCase(), p_role: input.role,
+      if (!uuid.test(user?.id || '')) return reply(401, {error: 'SIGN_IN_REQUIRED'});
+      const reservation = await requestFetch(`${base}/rest/v1/rpc/reserve_staff_invitation_for_delivery`, {method: 'POST', headers: serverHeaders, signal: AbortSignal.timeout(10000), body: JSON.stringify({
+        p_actor_user_id: user.id, p_restaurant_id: input.restaurantId, p_email: input.email.trim().toLowerCase(), p_role: input.role,
         p_display_name: input.displayName.trim(), p_request_id: input.requestId
       })});
       const raw = await reservation.json();

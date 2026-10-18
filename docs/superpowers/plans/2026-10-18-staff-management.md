@@ -3,12 +3,12 @@
 > **For agentic workers:** Use superpowers:subagent-driven-development or executing-plans. User approved implementation and independent specialist review; execute continuously within local-only scope.
 
 **Goal:** Owner-managed tenant staff with secure email invitations, immutable identity/history and authoritative suspension.
-**Architecture:** Additive membership state, narrow audited RPCs and a public-key-only server email endpoint; extend existing team UI/Auth adapters.
+**Architecture:** Additive membership state, narrow audited RPCs and a verified-actor server email endpoint with service-only reservation and public Auth OTP; extend existing team UI/Auth adapters.
 **Tech Stack:** Vanilla JS, Supabase Postgres/Auth/PostgREST, Edge function, Docker, Node/browser tests.
 **Spec:** docs/superpowers/specs/2026-10-18-staff-management.md
 
 ## Global Constraints
-Local Supabase and synthetic accounts only. No Production reads/writes/deploys. Preserve Owner/Manager/Staff operations and public QR. Draft PR only; no privileged credentials in frontend.
+Local Supabase and synthetic accounts only. No Production writes/deploys. Final review permits read-only catalog metadata comparison. Preserve Owner/Manager/Staff operations and public QR. Draft PR only; no privileged credentials in frontend.
 
 ## Review Focus
 Existing JWT after suspension; old invite after role change; concurrent Owner/target mutations; existing Auth identity in another tenant; email transport failures after invite reservation.

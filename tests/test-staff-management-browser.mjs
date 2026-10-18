@@ -253,6 +253,8 @@ try {
   await waitFor('document.getElementById("inviteAuthError").textContent.includes("expired")','expired invitation feedback');
   assert.equal(await evaluate('document.getElementById("invitePasswordSetupForm").classList.contains("hidden")'),true,'Expired invitation cannot enter setup');
   console.log('PASS existing-account invitation setup, mismatch validation, password update and keep-password continuation');
+  assert.equal(await evaluate('document.querySelectorAll("[data-copy-team-invite]").length'),0,'Browser cannot copy raw invitation tokens');
+  assert.ok(!calls.some(c=>/create_staff_invitation|create_restaurant_invite|reserve_staff_invitation_for_delivery/.test(c.url)),'Browser never directly reserves raw-token invitations');
   assert.deepEqual(exceptions,[],'No uncaught browser exceptions');
 
 } finally {

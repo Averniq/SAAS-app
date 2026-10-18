@@ -254,12 +254,15 @@ async function verifyApi() {
   await sql('drop trigger local_gate_reject_membership on public.restaurant_staff; drop function public.local_gate_reject_membership();');
   pass('forced failure leaves no claim, owner pointer, or partial membership');
   const secondOwner = await createUser('second-owner@local.integration');
+  const ownerPointer = (await sql(`select owner_user_id from public.restaurants where id=${quote(sake)};`)).trim();
+  const ownerCount = (await sql(`select count(*) from public.restaurant_staff where restaurant_id=${quote(sake)} and role='owner';`)).trim();
+  const membershipCount = (await sql(`select count(*) from public.restaurant_staff where restaurant_id=${quote(sake)};`)).trim();
   const invitation = await api('/rest/v1/rpc/create_restaurant_invite', { method: 'POST', token: owner.token, body: { p_restaurant_id: sake, p_email: secondOwner.email, p_role: 'owner' } });
-  assert.equal(invitation.status, 200, invitation.text);
-  const accepted = await api('/rest/v1/rpc/accept_restaurant_invite', { method: 'POST', token: secondOwner.token, body: { p_token: invitation.data.token } });
-  assert.equal(accepted.status, 200, accepted.text);
-  assert.equal((await sql(`select count(*) from public.restaurant_staff where restaurant_id=${quote(sake)} and role='owner';`)).trim(), '2');
-  pass('normal approved invitation can add an additional owner after bootstrap');
+  assert.ok(invitation.status >= 400, 'legacy owner invitations must be denied');
+  assert.equal((await sql(`select owner_user_id from public.restaurants where id=${quote(sake)};`)).trim(), ownerPointer);
+  assert.equal((await sql(`select count(*) from public.restaurant_staff where restaurant_id=${quote(sake)} and role='owner';`)).trim(), ownerCount);
+  assert.equal((await sql(`select count(*) from public.restaurant_staff where restaurant_id=${quote(sake)};`)).trim(), membershipCount);
+  pass('legacy owner invitation denied without changing ownership or memberships');
   const manager = await createUser('manager@local.integration');
   const staff = await createUser('staff@local.integration');
   const kitchen = await createUser('kitchen@local.integration');
@@ -363,6 +366,11 @@ export async function withLocalBrowserCredentials(action) {
 export async function withLocalGateDatabase(action) {
   if (!completed || cleaned) throw new Error('Local gates must pass before database test access');
   return action(names.db);
+}
+// Node-only test callback: never included in browser credentials, IPC or logs.
+export async function withLocalGateServerCredentials(action) {
+  if (!completed || cleaned) throw new Error('Local gates must pass before server test access');
+  return action({serverKey: serviceKey});
 }
 export const cleanupLocalGate = clean;
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

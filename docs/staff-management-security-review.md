@@ -8,16 +8,16 @@ Reviewed on 18 October 2026 against approved base `c7adb471b4f81b310a72e37b3b516
 - Owner-only staff edits match actor, target membership and restaurant; Owner/self targets cannot be changed. Direct client membership writes remain ungranted. Permitted target roles are Manager, All-round Staff, Kitchen and Cashier.
 - The shared tenant transaction lock serializes invitation creation, acceptance, revocation and membership edits. Expected membership versions reject stale updates. Role/status changes revoke outstanding authority; acceptance also rechecks the inviter's current authority.
 - Invitation acceptance requires the actual confirmed Auth email, a pending unexpired token and compatible membership state. Existing active memberships keep their role and identity; disabled memberships cannot be reactivated through legacy invites. Tokens cannot set roles directly.
-- The email endpoint verifies the caller against Auth and forwards that exact JWT to authorization RPCs. Only public keys are used; account creation/reuse relies on public Auth OTP, not browser or server service-role credentials. Recipient password setup updates the verified recipient's own Auth identity and does not establish recovery authority.
+- FINAL REVIEW CORRECTION: the endpoint verifies the caller against Auth, then passes the verified actor ID to a service-only reservation RPC using a private Edge-runtime credential. SQL rechecks current actor membership. Public Auth OTP still creates/reuses the recipient identity; no Auth-admin account provisioning is used. Browser clients cannot reserve or retrieve invitation tokens. Recipient password setup updates the verified recipient's own Auth identity and does not establish recovery authority.
 - Exact-origin CORS, fixed callback construction, bounded request bodies, upstream timeouts, shared cooldown and request-id deduplication constrain invitation transport. Error responses omit Auth bodies and link credentials. A lost endpoint response retries the same reservation; a received 202 permits a new attempt only through the shared cooldown.
 - Staff names, emails and role labels are escaped before HTML insertion. Async client results are fenced by user, tenant, role and session generation. Owner controls are scrubbed on logout. UI gating supplements server authorization.
 
-No confirmed authorization, tenant-isolation or privilege-escalation blocker was found in the reviewed paths. This is not a claim that unexecuted integration gates passed.
+The original review missed two invitation boundaries at 4159fc6: authenticated raw-token reservation and legacy Owner invitation/ownership change. The final append-only correction retires both client issuance RPCs, removes tokens from listings, restricts reservation to verified-actor server transport and rejects Owner acceptance. Independent final re-review found no remaining confirmed code authorization blocker. See `staff-management-premerge-security.md` for exact RED/GREEN evidence. This is not a claim that unexecuted integration gates passed.
 
 ## Independently executed checks
 
 - `node tests/test-staff-management-client.mjs` — PASS, including RPC payloads, active filtering and separate authenticated password setup.
-- `node tests/test-staff-invite-endpoint.mjs` — PASS, 29 mocked endpoint checks.
+- `node tests/test-staff-invite-endpoint.mjs` — PASS, originally 29 checks; final corrected suite 32 checks.
 - Both commands were rerun after the bounded status-name fallback and retry-documentation corrections and remained green.
 - `git diff --check` — PASS at the reviewed working state.
 

@@ -3979,10 +3979,6 @@ function setRestaurantTeamError(message = "") {
   node.classList.toggle("hidden", !message);
 }
 
-function restaurantInviteLink(token) {
-  return `${window.location.origin}/join/${encodeURIComponent(token)}`;
-}
-
 let staffEditDraft = null;
 let staffMutationBusy = false;
 let teamRequestEpoch = 0;
@@ -4038,17 +4034,13 @@ function renderRestaurantTeam() {
   staffList.innerHTML = members.filter(m => m.is_active !== false).map(row).join("") || `<div class="empty-state">No active team members.</div>`;
   if (disabledList) disabledList.innerHTML = members.filter(m => m.is_active === false).map(row).join("") || `<div class="empty-state">No disabled team members.</div>`;
   const invites = Array.isArray(restaurantTeamData.invites) ? restaurantTeamData.invites : [];
-  inviteList.innerHTML = invites.map(invite => `<article class="team-row invite-row"><div><strong>${escapeHtml(invite.display_name || invite.email)}</strong><span>${escapeHtml(invite.email)}  -  ${escapeHtml(STAFF_ROLE_LABELS[invite.role] || "Staff")}  -  expires ${escapeHtml(new Date(invite.expires_at).toLocaleDateString())}</span></div><div class="team-row-actions"><button class="ghost-button" type="button" data-copy-team-invite="${escapeHtml(invite.id)}">Copy link</button><button class="ghost-button" type="button" data-revoke-team-invite="${escapeHtml(invite.id)}">Revoke</button></div></article>`).join("") || `<div class="empty-state">No pending invitations.</div>`;
+  inviteList.innerHTML = invites.map(invite => `<article class="team-row invite-row"><div><strong>${escapeHtml(invite.display_name || invite.email)}</strong><span>${escapeHtml(invite.email)}  -  ${escapeHtml(STAFF_ROLE_LABELS[invite.role] || "Staff")}  -  expires ${escapeHtml(new Date(invite.expires_at).toLocaleDateString())}</span></div><div class="team-row-actions"><button class="ghost-button" type="button" data-revoke-team-invite="${escapeHtml(invite.id)}">Revoke</button></div></article>`).join("") || `<div class="empty-state">No pending invitations.</div>`;
   for (const list of [staffList, disabledList].filter(Boolean)) {
     list.querySelectorAll("[data-edit-staff]").forEach(button => button.addEventListener("click", () => startStaffEdit(button.dataset.editStaff)));
     list.querySelectorAll("[data-toggle-staff]").forEach(button => button.addEventListener("click", () => toggleStaffAccess(button.dataset.toggleStaff)));
     list.querySelectorAll("[data-cancel-staff]").forEach(button => button.addEventListener("click", () => { staffEditDraft = null; renderRestaurantTeam(); }));
   }
   document.getElementById("staffEditForm")?.addEventListener("submit", saveStaffEdit);
-  inviteList.querySelectorAll("[data-copy-team-invite]").forEach(button => button.addEventListener("click", () => {
-    const invite = invites.find(entry => entry.id === button.dataset.copyTeamInvite);
-    if (invite?.token) copyText(restaurantInviteLink(invite.token));
-  }));
   inviteList.querySelectorAll("[data-revoke-team-invite]").forEach(button => button.addEventListener("click", async () => {
     const fence = teamFence(); button.disabled = true;
     try { await window.TableOrderCloud.revokeRestaurantInvite(button.dataset.revokeTeamInvite); if (teamFenceMatches(fence)) await loadRestaurantTeam(); }
@@ -4129,7 +4121,7 @@ async function createRestaurantTeamInvite(event) {
     if (response?.status !== "accepted") throw new Error("INVITATION_UNAVAILABLE");
     inviteRequestId = null;
     await loadRestaurantTeam();
-    showOrderToast(response.delivery === "requested" ? "Invitation email requested. Ask your staff member to check their inbox." : "Invitation saved. Email delivery could not be confirmed; wait 60 seconds before retrying, or copy the pending invitation link.", response.delivery === "requested" ? "success" : "warning");
+    showOrderToast(response.delivery === "requested" ? "Invitation email requested. Ask your staff member to check their inbox." : "Invitation saved. Email delivery could not be confirmed; wait 60 seconds before requesting another invitation email.", response.delivery === "requested" ? "success" : "warning");
   } catch (error) { if (teamFenceMatches(fence)) setRestaurantTeamError(teamErrorMessage(error)); }
   finally { if (teamFenceMatches(fence)) button.disabled = false; }
 }
