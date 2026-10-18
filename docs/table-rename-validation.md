@@ -22,3 +22,21 @@ All fixtures are synthetic. Browser tests run an isolated headless Chrome profil
 No standalone lint or type-check script is configured. The build reports the existing outdated Browserslist database notice.
 
 Independent QA/UX and security reviews found no confirmed blocker. No Production reads or writes, QR operations, merge or deployment were performed for this work.
+
+## Automated acceptance — 18 October 2026
+
+PASS against the existing manually prepared local Docker Supabase environment, using Playwright and separate browser contexts for Owner, Manager, Staff and anonymous QR access. Tested product source: `5caab9d28d9a6037fcec7b1929424c6657e467df`. No product changes were needed during acceptance.
+
+- [x] Owner renames Table 4 to Patio 1 through Table Manager; reload preserves the saved name.
+- [x] Original retained Table 4 QR URL opens in a fresh unauthenticated context, displays Patio 1 and all 71 seeded Sake Street menu items.
+- [x] Existing cloud-synced Table 4 order remains attached to its original ID; Kitchen, Front Desk and invoice display Patio 1.
+- [x] Actual Print Bill action generates Patio 1 print content; print-media screenshot and PDF captured without sending a printer job or recording payment.
+- [x] Manager renames Table 5 to Patio 2; reload preserves the name.
+- [x] Staff can select Customer, Kitchen and Front Desk; Admin/Table Manager and Rename are inaccessible in the UI. A direct authenticated name-only PATCH returns zero updated rows under existing RLS.
+- [x] Table 6 can share the display name Patio 1. Whitespace-only input shows validation, and Table 7 remains unchanged.
+- [x] Read-only local verifier confirms exactly nine tables, unchanged table/cloud/local IDs and internal tokens, unchanged public QR token/hash rows, all original order associations preserved, and the original QR resolving to the same table with the new name.
+- [x] No QR issuance/rotation/revocation, payment writes, external browser requests, browser application exceptions, or Production access occurred during acceptance.
+
+Execution: `node artifacts/table-rename-manual/acceptance.mjs`, followed by `node artifacts/table-rename-manual/verify.mjs`. Evidence remains locally in the untracked `artifacts/table-rename-manual/acceptance/` folder: eight screenshots, print PDF and sanitized results JSON. Fixture credentials and bearer URLs are not committed. The local acceptance checklist is updated alongside this tracked report.
+
+Initial automation attempts needed startup-readiness waits and correctly scoped locators; these were harness failures, not application defects. The final full run passed. Existing 375/768/1280 synthetic browser QA remains recorded above; this additional real-backend acceptance ran at 1280px.
