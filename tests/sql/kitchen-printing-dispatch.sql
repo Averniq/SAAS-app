@@ -10,17 +10,17 @@ select public.set_kitchen_print_control('32000000-0000-0000-0000-000000000001',t
 insert into public.orders(id,restaurant_id,table_id,note,created_at) values('34000000-0000-0000-0000-000000000001','32000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000001','No peanuts',clock_timestamp());
 insert into public.order_items(restaurant_id,order_id,item_name,quantity,price,name_snapshot,notes) values('32000000-0000-0000-0000-000000000001','34000000-0000-0000-0000-000000000001','Synthetic noodles',2,10,'Synthetic noodles','No chilli');
 set constraints all immediate;
-select pg_temp.assert_true((select count(*)=1 from public.kitchen_print_jobs),'one dispatch');
-select pg_temp.assert_true((select snapshot->>'instructions'='No peanuts' and snapshot->'items'->0->>'notes'='No chilli' and (snapshot->>'copies')::int=2 from public.kitchen_print_jobs),'immutable full snapshot');
+select pg_temp.assert_true((select count(*)=1 from public.kitchen_print_jobs where restaurant_id='32000000-0000-0000-0000-000000000001'),'one dispatch');
+select pg_temp.assert_true((select snapshot->>'instructions'='No peanuts' and snapshot->'items'->0->>'notes'='No chilli' and (snapshot->>'copies')::int=2 from public.kitchen_print_jobs where restaurant_id='32000000-0000-0000-0000-000000000001'),'immutable full snapshot');
 update public.orders set status='ready' where id='34000000-0000-0000-0000-000000000001';
 update public.order_items set notes='changed later' where order_id='34000000-0000-0000-0000-000000000001';
-select pg_temp.assert_true((select count(*)=1 from public.kitchen_print_jobs),'no status re-enqueue');
-select pg_temp.assert_true((select snapshot->'items'->0->>'notes'='No chilli' from public.kitchen_print_jobs),'snapshot retained');
+select pg_temp.assert_true((select count(*)=1 from public.kitchen_print_jobs where restaurant_id='32000000-0000-0000-0000-000000000001'),'no status re-enqueue');
+select pg_temp.assert_true((select snapshot->'items'->0->>'notes'='No chilli' from public.kitchen_print_jobs where restaurant_id='32000000-0000-0000-0000-000000000001'),'snapshot retained');
 set constraints all deferred;
 insert into public.orders(id,restaurant_id,table_id,is_test_order,created_at) values('34000000-0000-0000-0000-000000000002','32000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000001',true,clock_timestamp());
 insert into public.order_items(restaurant_id,order_id,item_name,quantity,price,name_snapshot) values('32000000-0000-0000-0000-000000000001','34000000-0000-0000-0000-000000000002','Test',1,10,'Test');
 set constraints all immediate;
-select pg_temp.assert_true((select count(*)=1 from public.kitchen_print_jobs),'test orders excluded');
+select pg_temp.assert_true((select count(*)=1 from public.kitchen_print_jobs where restaurant_id='32000000-0000-0000-0000-000000000001'),'test orders excluded');
 set constraints all deferred;
 insert into public.orders(id,restaurant_id,table_id,created_at) values('34000000-0000-0000-0000-000000000003','32000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000001',clock_timestamp());
 set constraints all immediate;
@@ -46,7 +46,8 @@ end$$;
 select public.set_kitchen_print_control('32000000-0000-0000-0000-000000000001',false,false);
 do $$begin begin perform public.claim_kitchen_print_job('kp-dispatch'); raise exception 'LEGACY_ALLOWED'; exception when others then if sqlerrm<>'PRINT_PROTOCOL_UPGRADE_REQUIRED' then raise; end if; end; end$$;
 select public.set_kitchen_print_control('32000000-0000-0000-0000-000000000001',true,false);
-select pg_temp.assert_true((select count(*)=2 from public.kitchen_print_jobs),'reenable does not backfill');
+select pg_temp.assert_true((select count(*)=2 from public.kitchen_print_jobs where restaurant_id='32000000-0000-0000-0000-000000000001'),'reenable does not backfill');
 rollback;
+
 
 

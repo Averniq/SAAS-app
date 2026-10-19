@@ -26,7 +26,7 @@ select pg_temp.assert_true(:'activated'::jsonb->>'status'='active','pair activat
 select pg_temp.assert_true(not (:'activated'::jsonb ? 'secretHash'),'no hash response');
 select pg_temp.assert_true(public.activate_kitchen_print_pairing((:'pairing'::jsonb->>'pairingId')::uuid,repeat('a',64))->>'status'='denied','activation not replayable');
 reset role;
-select pg_temp.assert_true((select count(*)=1 from public.kitchen_print_devices),'single registration');
+select pg_temp.assert_true((select count(*)=1 from public.kitchen_print_devices where restaurant_id='12000000-0000-0000-0000-000000000001'),'single registration');
 select pg_temp.denied($q$update public.kitchen_print_audit set event='tamper'$q$);
 -- Proof failures must survive a denied activation response and stop at five.
 set local role authenticated;
@@ -89,5 +89,6 @@ select set_config('request.jwt.claims','{"sub":"11000000-0000-0000-0000-00000000
 select pg_temp.denied($q$select public.begin_kitchen_print_pairing('12000000-0000-0000-0000-000000000001','Removed staff',repeat('f',64))$q$);
 reset role;
 rollback;
+
 
 
