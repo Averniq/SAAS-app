@@ -1,0 +1,15 @@
+{
+  "appId": "com.aveniq.kitchen",
+  "appName": "Aveniq Kitchen",
+  "webDir": "dist",
+  "server": {
+    "hostname": "localhost",
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false,
+    "loggingBehavior": "none"
+  },
+  "loggingBehavior": "none"
+}

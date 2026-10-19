@@ -9,20 +9,20 @@ importers:
   .:
     dependencies:
       '@capacitor/android':
-        specifier: ^8.4.1
+        specifier: 8.4.1
         version: 8.4.1(@capacitor/core@8.4.1)
       '@capacitor/core':
-        specifier: ^8.4.1
+        specifier: 8.4.1
         version: 8.4.1
       '@capacitor/ios':
-        specifier: ^8.4.1
+        specifier: 8.4.1
         version: 8.4.1(@capacitor/core@8.4.1)
       qrcode-generator:
         specifier: 1.4.4
         version: 1.4.4
     devDependencies:
       '@capacitor/cli':
-        specifier: ^8.4.1
+        specifier: 8.4.1
         version: 8.4.1
       tailwindcss:
         specifier: 3.4.17

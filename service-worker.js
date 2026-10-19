@@ -1,8 +1,13 @@
-const SHELL_CACHE = "aveniq-shell-v34";
-const RUNTIME_CACHE = "aveniq-runtime-v34";
+const SHELL_CACHE = "aveniq-shell-v35-kitchen";
+const RUNTIME_CACHE = "aveniq-runtime-v35-kitchen";
 const APP_SHELL = [
   "/",
   "/index.html",
+  "/src/kitchen-printing/bootstrap.js",
+  "/src/kitchen-printing/native-agent.js",
+  "/src/kitchen-printing/printer-settings.js",
+  "/src/kitchen-printing/printer-status.js",
+  "/src/kitchen-printing/contracts.js",
   "/manifest.webmanifest",
   "/styles.css?v=20260812-ui-audit",
   "/app.js?v=20260812-ui-audit",

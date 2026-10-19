@@ -1,0 +1,16 @@
+import {createNativeAgent} from './native-agent.js';
+import {mountKitchenPrinters} from './printer-settings.js';
+const nativeAgent=createNativeAgent();let context=null,dispose=null,mountKey='',lastToken='',epoch=0,stopped=false,syncing=false,repeat=false,agentDesired=true;
+const eligible=()=>context?.staff&&['owner','manager','staff','kitchen'].includes(context.staff.role)&&!document.hidden&&(context.view==='kitchen'||context.view==='setup'&&!document.querySelector('[data-admin-panel="printers"]')?.classList.contains('admin-panel-inactive'));
+function teardown(clearSession=false){epoch++;dispose?.();dispose=null;mountKey='';if(clearSession)lastToken='';nativeAgent.stop({clearSession}).catch(()=>{});}
+async function synchronize(){if(syncing){repeat=true;return;}syncing=true;try{do{repeat=false;if(stopped||!eligible()){if(dispose)teardown(false);continue;}const expected=epoch,staff=context.staff;if(nativeAgent.available){try{const session=await window.TableOrderCloud.getKitchenPrintSession(staff.restaurantId);if(expected!==epoch||stopped||!eligible())continue;if(session.accessToken!==lastToken){await nativeAgent.setSession(session);if(expected!==epoch||stopped||!eligible()){await nativeAgent.stop();continue;}lastToken=session.accessToken;}if(agentDesired&&expected===epoch&&!stopped&&eligible())await nativeAgent.start({requestPermission:false});}catch(error){if(expected===epoch){const root=document.getElementById(context.view==='kitchen'?'kitchenPrinterMount':'settingsPrinterMount');const warning=root?.querySelector('[data-slot="native"]');if(warning)warning.textContent=`Tablet printing needs attention: ${error.message}. Kitchen orders continue independently.`;}}}
+ }while(repeat);}finally{syncing=false;}}
+function update(){if(stopped||!eligible()){if(dispose)teardown(false);return;}const key=[context.staff.restaurantId,context.staff.id,context.staff.role,context.view].join(':');if(key!==mountKey){teardown(false);mountKey=key;const root=document.getElementById(context.view==='kitchen'?'kitchenPrinterMount':'settingsPrinterMount');dispose=mountKitchenPrinters({root,cloud:window.TableOrderCloud,nativeAgent,staff:context.staff,categories:context.categories||[],mode:context.view==='kitchen'?'kitchen':'settings'});synchronize();}}
+window.addEventListener('kitchen-printing-context',event=>{const previous=context;context=event.detail;const scopeChanged=previous?.staff?.id!==context?.staff?.id||previous?.staff?.restaurantId!==context?.staff?.restaurantId;if(scopeChanged){teardown(true);stopped=false;}update();});
+window.addEventListener('kitchen-printing-agent-desired',event=>{agentDesired=event.detail?.enabled===true;if(!agentDesired){epoch++;nativeAgent.stop({clearSession:false}).catch(()=>{});}});
+window.addEventListener('kitchen-printing-stop',()=>{stopped=true;teardown(true);});
+window.addEventListener('kitchen-printing-session-changed',()=>synchronize());
+document.addEventListener('visibilitychange',()=>{if(document.hidden)teardown(false);else update();});
+document.addEventListener('click',event=>{if(event.target instanceof Element&&event.target.closest('[data-admin-section]'))queueMicrotask(update);});
+window.addEventListener('hashchange',update);setInterval(()=>{if(eligible()&&!stopped)synchronize();},15000);
+window.dispatchEvent(new CustomEvent('kitchen-printing-context-request'));

@@ -374,6 +374,7 @@ const STAFF_VIEW_ROLES = {
 };
 
 function staffDefaultDestination(role) {
+  if (staffUser?.kitchenReadOnly && ["owner", "manager", "staff", "kitchen"].includes(role)) return "kitchen";
   if (["owner", "manager"].includes(role)) return "dashboard";
   if (role === "kitchen") return "kitchen";
   if (role === "cashier") return "frontdesk";
@@ -1387,6 +1388,7 @@ function drawQrCanvas(canvas, text) {
 }
 
 function staffCanAccess(view) {
+  if (staffUser?.kitchenReadOnly && view !== "kitchen") return false;
   const allowedRoles = STAFF_VIEW_ROLES[view];
   return !allowedRoles || Boolean(staffUser && allowedRoles.includes(staffUser.role));
 }
@@ -1633,8 +1635,8 @@ async function syncCloudOrders({ notify = true } = {}) {
   setCloudSyncStatus("syncing", "Syncing");
 
   try {
-    const rows = await window.TableOrderCloud.loadOrders(staffUser.restaurantId);
-    const cloudPayments = window.TableOrderCloud.loadFrontdeskPayments
+    const rows = await window.TableOrderCloud.loadOrders(staffUser.restaurantId, { kitchenReadOnlyFallback: activeView === "kitchen" && staffUser.kitchenReadOnly === true });
+    const cloudPayments = !staffUser.kitchenReadOnly && window.TableOrderCloud.loadFrontdeskPayments
       ? await window.TableOrderCloud.loadFrontdeskPayments(staffUser.restaurantId).catch(() => null) : null;
     const cloudOrders = rows.map(cloudOrderToLocal);
     const trackedByCloudId = new Set(state.orders.filter((order) => order.customerTracked && order.cloudId).map((order) => order.cloudId));
@@ -1939,7 +1941,7 @@ function selectAdminMenuSection(menu, { updateUrl = true } = {}) {
 }
 
 function selectAdminSection(section, { menu = "status", updateUrl = true } = {}) {
-  const available = new Set(["overview", "menu", "restaurant", "team", "tables"]);
+  const available = new Set(["overview", "menu", "restaurant", "team", "tables", "printers"]);
   const selected = available.has(section) ? section : "overview";
   document.querySelectorAll("[data-admin-section]").forEach((button) => {
     const active = button.dataset.adminSection === selected;
@@ -2416,6 +2418,7 @@ async function submitOrder() {
 }
 
 async function updateOrderStatus(orderId, status) {
+  if (staffUser?.kitchenReadOnly) { showOrderToast("Local baseline is read-only; order status was not changed.", "warning"); return; }
   const order = state.orders.find((entry) => entry.id === orderId);
   if (!order) return;
   const previousStatus = order.status;
@@ -2443,6 +2446,13 @@ async function updateOrderStatus(orderId, status) {
 
 function renderKitchen() {
   const board = document.getElementById("kitchenBoard");
+  const warningId = "kitchenReadOnlyWarning";
+  document.getElementById(warningId)?.remove();
+  if (staffUser?.kitchenReadOnly) {
+    const warning = document.createElement("p"); warning.id = warningId; warning.setAttribute("role", "status");
+    warning.textContent = "Local baseline: Kitchen orders are read-only. Payment and item correction fields are unavailable; order changes and other workspaces are disabled. Printer setup and test tickets remain available.";
+    board.before(warning);
+  }
   const activeOrders = state.orders.filter((order) => !["Served", "Paid", "Voided", "Cancelled"].includes(order.status));
 
   if (!activeOrders.length) {
@@ -5307,6 +5317,7 @@ function renderPlatformRestaurants() {
 }
 
 function canUseKitchenVoidActions() {
+  if (staffUser?.kitchenReadOnly) return false;
   return ["owner", "manager", "staff", "cashier"].includes(staffUser?.role);
 }
 
@@ -5354,6 +5365,7 @@ function enableKitchenItemLongPress(board) {
 }
 
 function canApplyKitchenStatus(currentStatus, action) {
+  if (staffUser?.kitchenReadOnly) return false;
   const current = String(currentStatus || "").toLowerCase();
   return (action === "Preparing" && ["new", "draft", "confirmed", "kitchen_accepted"].includes(current)) || (action === "Ready" && current === "preparing") || (action === "Served" && current === "ready");
 }
@@ -6201,7 +6213,14 @@ function bindGlobalActions() {
   });
 }
 
+function notifyKitchenPrintingContext() {
+  const categories = [...new Map((state.menuItems || []).filter(item => item.categoryId).map(item => [item.categoryId, { id: item.categoryId, name: item.category }])).values()];
+  window.dispatchEvent(new CustomEvent('kitchen-printing-context', { detail: { staff: staffUser ? { id: staffUser.id, restaurantId: staffUser.restaurantId, role: staffUser.role } : null, view: activeView, categories } }));
+}
+window.addEventListener('kitchen-printing-context-request', notifyKitchenPrintingContext);
+
 function render() {
+  notifyKitchenPrintingContext();
   applyTheme();
   renderStaffSession();
   renderTablePicker();

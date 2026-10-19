@@ -1,5 +1,7 @@
 (function createAveniqCloud() {
   const config = window.TABLEORDER_SUPABASE || {};
+  // Explicit development build only; never grants access or enables writes.
+  const localKitchenCompatibility = config.kitchenLocalReadOnlyCompatibility === true && /^http:[/][/](127\.0\.0\.1|10\.0\.2\.2):[0-9]+$/.test(config.url || "");
   const SESSION_KEY = "aveniq-owner-session";
   let authSession = readStoredSession();
   let activeMembership = null;
@@ -31,6 +33,7 @@
     authSession = session ? { ...session, expires_at: session.expires_at || Math.floor(Date.now() / 1000) + Number(session.expires_in || 3600) } : null;
     if (authSession) window.localStorage.setItem(SESSION_KEY, JSON.stringify(authSession));
     else window.localStorage.removeItem(SESSION_KEY);
+    window.dispatchEvent(new CustomEvent("kitchen-printing-session-changed"));
     return authSession;
   }
 
@@ -172,10 +175,14 @@
   async function getMemberships() {
     const session = await getSession();
     if (!session?.user?.id) return [];
-    return request(
-      `restaurant_staff?select=id,restaurant_id,role,restaurants(id,slug,name,status,is_active,venue_status)&user_id=eq.${encodeURIComponent(session.user.id)}`,
-      { accessToken: session.access_token }
-    );
+    const scope = '&user_id=eq.' + encodeURIComponent(session.user.id);
+    try {
+      return await request('restaurant_staff?select=id,restaurant_id,role,restaurants(id,slug,name,status,is_active,venue_status)' + scope, { accessToken: session.access_token });
+    } catch (error) {
+      if (!localKitchenCompatibility || error.code !== '42703' || !/^column restaurants(?:_[0-9]+)?\.venue_status does not exist$/.test(error.message)) throw error;
+      const rows = await request('restaurant_staff?select=id,restaurant_id,role,restaurants(id,slug,name,status,is_active)' + scope, { accessToken: session.access_token });
+      return rows.map(row => ({...row, kitchen_read_only: true}));
+    }
   }
 
   async function provisionSelfServiceAccount(session = null) {
@@ -249,7 +256,10 @@
   async function getStaffProfile({ preferActiveRestaurant = false } = {}) {
     const session = await getSession();
     if (!session?.user?.id) return null;
-    await provisionSelfServiceAccount(session);
+    try { await provisionSelfServiceAccount(session); }
+    catch (error) {
+      if (!localKitchenCompatibility || error.code !== 'PGRST202' || !error.message.includes('public.provision_self_service_account')) throw error;
+    }
     const memberships = await getMemberships();
     if (!memberships.length) {
       const error = new Error("ONBOARDING_REQUIRED");
@@ -272,7 +282,7 @@
       : null);
     if (!membership) throw new Error("This account does not have access to this restaurant.");
     const related = membershipRestaurant(membership);
-    activeMembership = { restaurantId: membership.restaurant_id, restaurantSlug: related?.slug, role: membership.role };
+    activeMembership = { restaurantId: membership.restaurant_id, restaurantSlug: related?.slug, role: membership.role, kitchenReadOnly: membership.kitchen_read_only === true };
     return {
       id: session.user.id,
       email: session.user.email || "Staff",
@@ -281,6 +291,7 @@
       restaurantName: related?.name || "Restaurant",
       restaurantStatus: related?.status || "active",
       venueStatus: related?.venue_status || "",
+      kitchenReadOnly: membership.kitchen_read_only === true,
       role: membership.role
     };
   }
@@ -355,6 +366,7 @@
   }
 
   async function signOut() {
+    window.dispatchEvent(new CustomEvent("kitchen-printing-stop"));
     const token = activeAccessToken();
     try { if (token) await authRequest("logout", { method: "POST", accessToken: token }); }
     finally { activeMembership = null; storeSession(null); }
@@ -373,6 +385,18 @@
   async function loadRestaurantData() {
     const context = routeContext();
     const session = ["order", "restaurant"].includes(context.area) ? null : await getSession();
+    if (localKitchenCompatibility && activeMembership?.kitchenReadOnly && session?.access_token && ["owner","manager","staff","kitchen"].includes(activeMembership.role)) {
+      const tenant = encodeURIComponent(activeMembership.restaurantId);
+      const options = {accessToken:session.access_token};
+      const [restaurants,tables,menuItems] = await Promise.all([
+        request('restaurants?select=id,slug,name,subtitle,address,phone,tax_id,tax_rate,timezone,is_open,logo_url,theme_config&id=eq.'+tenant+'&limit=1',options),
+        request('tables?select=id,local_id,table_name,name,table_number,table_token&restaurant_id=eq.'+tenant+'&is_active=eq.true&order=sort_order,id&limit=500',options),
+        request('menu_items?select=id,local_id,category_id,category,name,description,price,tags,image_url,photo_url,option_template,is_available,sold_out&restaurant_id=eq.'+tenant+'&is_active=eq.true&order=sort_order,id&limit=500',options)
+      ]);
+      if (!restaurants?.[0]) throw new Error("Authorized local restaurant is unavailable.");
+      if (tables.length === 500 || menuItems.length === 500) throw new Error("Local read-only setup exceeds the bounded preview; narrow the fixture.");
+      return {restaurant:restaurants[0],tables,menuItems};
+    }
     const data = await request("rpc/get_public_restaurant", {
       method: "POST",
       accessToken: session?.access_token,
@@ -477,13 +501,16 @@
     return request("rpc/get_customer_order_status", { method: "POST", body: JSON.stringify({ p_order_id: orderId, p_local_id: localId, p_table_token: tableToken }) });
   }
 
-  async function loadOrders(restaurantId) {
+  async function loadOrders(restaurantId, { kitchenReadOnlyFallback = false } = {}) {
     const session = await getSession();
     if (!session) throw new Error("Staff login is required.");
-    return request(
-      `orders?select=id,local_id,order_number,restaurant_id,table_id,customer_name,status,payment_status,note,subtotal,tax,total,payment_method,paid_at,created_at,served_at,closed_at,voided_at,void_reason,tables(local_id,table_name),order_items(id,menu_item_id,item_name,price,quantity,notes,options,status,voided_at,void_reason)&restaurant_id=eq.${encodeURIComponent(restaurantId)}&order=created_at.desc&limit=500`,
-      { accessToken: session.access_token }
-    );
+    try { return await request(`orders?select=id,local_id,order_number,restaurant_id,table_id,customer_name,status,payment_status,note,subtotal,tax,total,payment_method,paid_at,created_at,served_at,closed_at,voided_at,void_reason,tables(local_id,table_name),order_items(id,menu_item_id,item_name,price,quantity,notes,options,status,voided_at,void_reason)&restaurant_id=eq.${encodeURIComponent(restaurantId)}&order=created_at.desc&limit=500`, {accessToken:session.access_token}); }
+    catch (error) {
+      if (!localKitchenCompatibility || !kitchenReadOnlyFallback || error.code !== '42703' || !/^column (?:orders(?:_[0-9]+)?\.(?:payment_status|voided_at|void_reason)|order_items(?:_[0-9]+)?\.(?:status|voided_at|void_reason)) does not exist$/.test(error.message)) throw error;
+      const projection = 'orders?select=id,local_id,order_number,restaurant_id,table_id,customer_name,status,note,subtotal,tax,total,payment_method,paid_at,created_at,served_at,closed_at,tables(local_id,table_name),order_items(id,menu_item_id,item_name,price,quantity,notes,options)&restaurant_id=eq.' + encodeURIComponent(restaurantId) + '&order=created_at.desc&limit=500';
+      const rows = await request(projection, {accessToken:session.access_token});
+      return rows.map(row => ({...row,kitchen_read_only:true,payment_status:'unknown',order_items:(row.order_items||[]).map(item=>({...item,status:'unknown'}))}));
+    }
   }
 
   async function loadReportRpc(name, restaurantId, range = null) {
@@ -649,7 +676,28 @@
     });
   }
 
+  async function getKitchenPrintSession(restaurantId) {
+    const session = await getSession();
+    if (!session?.access_token || activeMembership?.restaurantId !== restaurantId || !['owner','manager','staff','kitchen'].includes(activeMembership?.role)) throw new Error('PRINT_PERMISSION_DENIED');
+    return {accessToken:session.access_token,expiresAt:session.expires_at,restaurantId,operatorId:session.user.id};
+  }
+  async function kitchenPrintRpc(name,args) {
+    const session=await getSession();if(!session?.access_token)throw new Error('SIGN_IN_REQUIRED');
+    return request('rpc/'+name,{method:'POST',accessToken:session.access_token,body:JSON.stringify(args)});
+  }
+  const listKitchenPrinters=restaurantId=>kitchenPrintRpc('list_kitchen_printers',{p_restaurant_id:restaurantId});
+  const saveKitchenPrinter=(restaurantId,id,config)=>kitchenPrintRpc('save_kitchen_printer',{p_restaurant_id:restaurantId,p_printer_id:id,p_config:config});
+  const disableKitchenPrinter=(id,reason)=>kitchenPrintRpc('disable_kitchen_printer',{p_printer_id:id,p_reason:reason});
+  const setKitchenPrintControl=(restaurantId,enabled,allowTestOrders=false)=>kitchenPrintRpc('set_kitchen_print_control',{p_restaurant_id:restaurantId,p_enabled:enabled,p_allow_test_orders:allowTestOrders});
+  const approveKitchenPrintPairing=(id,printers)=>kitchenPrintRpc('approve_kitchen_print_pairing',{p_pairing_id:id,p_printer_ids:printers});
+  const revokeKitchenPrintDevice=(id,reason)=>kitchenPrintRpc('revoke_kitchen_print_device',{p_device_id:id,p_reason:reason});
+  const requestKitchenTestPrint=(id,key)=>kitchenPrintRpc('request_kitchen_test_print',{p_printer_id:id,p_request_key:key});
+  const listKitchenPrintHistory=(restaurantId,before=null,beforeId=null,limit=25)=>kitchenPrintRpc('list_kitchen_print_history',{p_restaurant_id:restaurantId,p_before:before,p_before_id:beforeId,p_limit:limit});
+  const requestKitchenReprint=(id,reason,key,confirmed)=>kitchenPrintRpc('request_kitchen_reprint',{p_job_id:id,p_reason:reason,p_request_key:key,p_duplicate_paper_confirmed:confirmed===true});
+  const resolveKitchenPrintUncertainty=(id,resolution,reason,confirmed)=>kitchenPrintRpc('resolve_kitchen_print_uncertainty',{p_job_id:id,p_resolution:resolution,p_reason:reason,p_agent_stopped_confirmed:confirmed===true});
+
   window.TableOrderCloud = {
+    getKitchenPrintSession,listKitchenPrinters,saveKitchenPrinter,disableKitchenPrinter,setKitchenPrintControl,approveKitchenPrintPairing,revokeKitchenPrintDevice,requestKitchenTestPrint,listKitchenPrintHistory,requestKitchenReprint,resolveKitchenPrintUncertainty,
     config, routeContext, request, checkConnection, loadRestaurantData, getPublicTenantContext, bootstrapMenu, submitOrder, loadCustomerOrderStatus,
     loadOrders, loadFrontdeskPayments, updateOrderStatus, recordFrontdeskPayment, voidOrder, voidOrderItem, voidOrderItems, getOrderActivity, updateMenuItemPhoto, uploadMenuItemPhoto, uploadBrandingLogo, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
     loadReportDashboard, loadSalesReport, loadMenuReport, loadTableReport, loadHourlyReport, loadOrderReport,

@@ -383,6 +383,7 @@
           </div>
         </div>
         <div class="kitchen-alert hidden" id="kitchenAlert" role="status" aria-live="polite"></div>
+        <section id="kitchenPrinterMount" aria-label="Kitchen printing status"></section>
         <div class="order-board" id="kitchenBoard"></div>
       </section>
 
@@ -496,6 +497,7 @@
             <button class="admin-settings-nav-item" type="button" data-admin-section="restaurant" aria-pressed="false">Restaurant</button>
             <button class="admin-settings-nav-item" type="button" data-admin-section="team" aria-pressed="false">Team</button>
             <button class="admin-settings-nav-item" type="button" data-admin-section="tables" aria-pressed="false">Tables</button>
+            <button class="admin-settings-nav-item" type="button" data-admin-section="printers" aria-pressed="false">Kitchen printers</button>
           </nav>
           <nav class="admin-menu-nav hidden" id="adminMenuNav" aria-label="Menu management sections">
             <button class="admin-menu-nav-item active" type="button" data-menu-section="status" aria-pressed="true">Availability</button>
@@ -504,6 +506,7 @@
             <button class="admin-menu-nav-item" type="button" data-menu-section="import" aria-pressed="false">Import</button>
           </nav>
           <div class="setup-grid" id="adminSettingsContent">
+          <section class="setup-panel ds-section-card wide-panel admin-panel-inactive" data-admin-panel="printers"><div id="settingsPrinterMount"></div></section>
           <section class="setup-panel ds-section-card wide-panel database-panel" data-admin-panel="overview">
             <div class="panel-title">
               <div>
@@ -886,5 +889,6 @@
     <script src="/supabase-client.js?v=20260723-staff-status"></script>
     <script src="/vendor/qrcode.js?v=20260717-1"></script>
     <script src="/app.js?v=20260812-ui-audit"></script>
+    <script type="module" src="/src/kitchen-printing/bootstrap.js"></script>
   </body>
 </html>

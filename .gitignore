@@ -14,3 +14,5 @@ preview-server*.log
 .superpowers/
 .tools/
 .kitchen-local/
+
+android/app/src/main/assets/kitchen-print-backend.json

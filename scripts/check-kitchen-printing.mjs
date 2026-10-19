@@ -1,0 +1,4 @@
+import {readdir} from 'node:fs/promises';import {spawnSync} from 'node:child_process';import path from 'node:path';import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('../',import.meta.url));const directory=path.join(root,'src/kitchen-printing');
+for(const file of (await readdir(directory)).filter(name=>name.endsWith('.js'))){const check=spawnSync(process.execPath,['--check',path.join(directory,file)],{encoding:'utf8',windowsHide:true});if(check.status!==0)throw Error(check.stderr);}
+const typecheck=spawnSync(process.execPath,[path.join(root,'.tools/typecheck/node_modules/typescript/bin/tsc'),'-p',path.join(directory,'tsconfig.json')],{encoding:'utf8',windowsHide:true});if(typecheck.status!==0){process.stderr.write(typecheck.stdout+typecheck.stderr);process.exit(1);}console.log('PASS scoped kitchen JavaScript syntax and TypeScript checkJs/declaration checks.');

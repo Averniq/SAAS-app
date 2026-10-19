@@ -1900,3 +1900,25 @@ body.review-order-open > .mobile-cart-dock {
     scrollbar-gutter: stable;
   }
 }
+
+/* Native printing stays visually independent from the food-order board. */
+.kitchen-printers { padding:1rem; margin-block:1rem; border:1px solid #cbd5e1; border-radius:1rem; background:#fff; color:#172033; }
+.kitchen-printers h2 { font-size:1.25rem; font-weight:700; }
+.kitchen-printers h3 { font-size:1.1rem; font-weight:650; margin-block:.75rem; }
+.kitchen-printers p { margin-block:.5rem; overflow-wrap:anywhere; }
+.kitchen-printers button,.kitchen-printers summary { min-height:44px; padding:.65rem .9rem; border:1px solid #9ca3af; border-radius:.5rem; cursor:pointer; }
+.kitchen-printers button:disabled { opacity:.5; cursor:wait; }
+.kitchen-printers label { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; min-height:44px; margin-block:.6rem; }
+.kitchen-printers input:not([type=checkbox]),.kitchen-printers select,.kitchen-printers textarea { width:100%; min-height:44px; padding:.65rem; border:1px solid #9ca3af; border-radius:.4rem; color:#172033; background:#fff; }
+.kitchen-printers input[type=checkbox] { width:24px; height:24px; margin:.6rem; }
+.kitchen-printers form,.kitchen-printers fieldset { padding:.75rem; border:1px solid #cbd5e1; border-radius:.6rem; }
+.kitchen-printers .printer-toolbar { display:flex; gap:.6rem; flex-wrap:wrap; margin-block:.75rem; }
+.kitchen-printers .printer-status-card { border:1px solid #cbd5e1; border-radius:.7rem; padding:.8rem; margin-block:.7rem; }
+.kitchen-printers .printer-warning { background:#fff3d6; border:2px solid #a16207; padding:.75rem; color:#713f12; }
+.kitchen-printers details { margin-block:1rem; }
+.kitchen-printers ol { list-style:decimal; padding-left:1.5rem; margin-block:1rem; }
+.kitchen-printers dialog { width:min(95vw,36rem); max-height:90vh; padding:1rem; border:1px solid #64748b; border-radius:.8rem; overflow:auto; }
+.kitchen-printers dialog::backdrop { background:rgb(15 23 42/.6); }
+.kitchen-printers :focus-visible { outline:3px solid #2563eb; outline-offset:3px; }
+
+.kitchen-printers [hidden] { display:none !important; }
