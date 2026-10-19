@@ -21,7 +21,7 @@ function docker(argv, input) {
 const info = JSON.parse(docker(['inspect', container]))[0];
 if (info.Config.Labels['com.supabase.cli.project'] !== marker.projectId || path.resolve(info.Config.Labels['com.supabase.cli.workdir']) !== workspace) throw new Error('Isolated Docker project/workspace identity mismatch');
 const suite = args[args.indexOf('--suite') + 1];
-const suites = { access: ['access', 'config'], dispatch: ['dispatch', 'compatibility'], delivery: ['delivery', 'history'], concurrency: ['concurrency'], acceptance: ['acceptance'] };
+const suites = { access: ['access', 'config', 'safety-followups'], dispatch: ['dispatch', 'compatibility'], delivery: ['delivery', 'history'], concurrency: ['concurrency'], acceptance: ['access','config','safety-followups','dispatch','compatibility','delivery','history','rollback'] };
 if (!suites[suite]) throw new Error('Unknown local suite');
 if (suite === 'concurrency') {
   const orderTenant=randomUUID(), table=randomUUID();
