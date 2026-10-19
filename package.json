@@ -5,8 +5,27 @@
     "build": "tailwindcss -i ./src/tailwind.css -o ./styles.css --minify && node ./scripts/build-site.mjs",
     "build:css": "tailwindcss -i ./src/tailwind.css -o ./styles.css --minify",
     "build:site": "node ./scripts/build-site.mjs",
+    "test:migrations": "node ./scripts/test-migration-integrity.mjs",
     "provision:authorization-users": "node ./scripts/provision-authorization-users.mjs",
     "test:authorization": "node ./scripts/test-authorization.mjs",
+    "test:self-service": "node ./scripts/test-self-service-signup.mjs",
+    "test:self-service-provisioning": "node ./scripts/test-self-service-provisioning.mjs",
+    "test:self-service-recovery": "node ./scripts/test-self-service-recovery.mjs",
+    "test:trial-entitlement": "node ./scripts/test-trial-entitlement.mjs",
+    "test:self-service-onboarding": "node ./scripts/test-self-service-onboarding.mjs",
+    "test:app-shell-startup": "node ./scripts/test-app-shell-startup.mjs",
+    "test:sample-qr-test-order": "node ./scripts/test-sample-qr-test-order.mjs",
+    "test:test-order-reporting": "node ./scripts/test-test-order-reporting.mjs",
+    "test:mobile-pwa": "node ./scripts/test-mobile-pwa.mjs",
+    "test:attendance-pin": "node ./scripts/test-shared-pin-attendance.mjs",
+    "test:attendance-pin-integration": "node ./scripts/test-shared-pin-attendance-integration.mjs",
+    "test:external-staff-clock": "node ./scripts/test-external-staff-clock.mjs",
+    "test:attendance-report": "node ./scripts/test-attendance-weekly-reporting.mjs",
+    "test:attendance-report-integration": "node ./scripts/test-attendance-weekly-reporting-integration.mjs",
+    "test:order-integrity": "node ./tests/test-order-integrity.mjs",
+    "test:p0-03-payment-ledger": "node ./tests/test-p0-03-payment-ledger.mjs",
+    "test:p0-03-payment-ledger:local": "node ./scripts/run-p0-03-local-ledger-tests.mjs",
+    "test:critical-business-rules": "node ./tests/test-critical-business-rules.mjs && node ./tests/test-critical-server-guards.mjs",
     "serve": "node ./scripts/serve.mjs",
     "watch:css": "tailwindcss -i ./src/tailwind.css -o ./styles.css --watch",
     "mobile:sync": "pnpm run build && cap sync",
@@ -22,6 +41,7 @@
   "dependencies": {
     "@capacitor/android": "^8.4.1",
     "@capacitor/core": "^8.4.1",
-    "@capacitor/ios": "^8.4.1"
+    "@capacitor/ios": "^8.4.1",
+    "qrcode-generator": "1.4.4"
   }
 }

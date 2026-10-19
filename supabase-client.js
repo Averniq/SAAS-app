@@ -7,11 +7,15 @@
   function routeContext() {
     const parts = window.location.pathname.split("/").filter(Boolean).map(decodeURIComponent);
     const params = new URLSearchParams(window.location.search);
+    if (parts[0] === "order" && parts[1] && !parts[2]) return { area: "token-order", publicToken: parts[1], restaurantSlug: "", tableRef: "" };
+    if (parts[0] === "staff-clock" && parts[1] && !parts[2]) return { area: "staff-clock", publicClockToken: parts[1], restaurantSlug: "", tableRef: "" };
     if (parts[0] === "order" && parts[1]) return { area: "order", restaurantSlug: parts[1], tableRef: parts[2] || params.get("table") || "" };
     if (parts[0] === "dashboard" && parts[1]) return { area: parts[2] || "dashboard", restaurantSlug: parts[1], tableRef: "" };
     if (parts[0] === "r" && parts[1]) return { area: "restaurant", restaurantSlug: parts[1], tableRef: params.get("table") || "" };
     if (parts[0] === "join" && parts[1]) return { area: "join", restaurantSlug: "", tableRef: "", inviteToken: parts[1] };
-    if (["signup", "login", "onboarding", "platform"].includes(parts[0])) return { area: parts[0], restaurantSlug: params.get("restaurant") || "", tableRef: "" };
+    if (parts[0] === "staff") return { area: "staff", restaurantSlug: params.get("restaurant") || "", tableRef: "" };
+    if (["admin", "frontdesk", "kitchen", "reports", "attendance"].includes(parts[0])) return { area: parts[0] === "admin" ? "dashboard" : parts[0], restaurantSlug: params.get("restaurant") || "", tableRef: "", protectedAlias: true };
+    if (["signup", "login", "verify", "forgot-password", "reset-password", "onboarding", "platform"].includes(parts[0])) return { area: parts[0], restaurantSlug: params.get("restaurant") || "", tableRef: "" };
     return { area: "app", restaurantSlug: params.get("restaurant") || config.restaurantSlug || "demo", tableRef: params.get("table") || params.get("token") || "" };
   }
 
@@ -43,6 +47,13 @@
       const error = new Error(data?.msg || data?.message || data?.error_description || data?.hint || `Supabase request failed (${response.status}).`);
       error.status = response.status;
       error.code = data?.code || data?.error || "";
+      error.details = data?.details || data?.detail || "";
+      if (error.message === "TRIAL_LIMIT_REACHED") {
+        error.message = "You’ve reached your 90-day free trial limit. Upgrade your plan to add more.";
+      }
+      if (error.message === "INVALID_TIMEZONE") {
+        error.message = "Choose a valid timezone and try again.";
+      }
       throw error;
     }
     return data;
@@ -77,11 +88,36 @@
     return parseResponse(response);
   }
 
-  async function signUp(email, password) {
-    const redirectTo = window.location.href.split("#")[0];
-    const result = await authRequest(`signup?redirect_to=${encodeURIComponent(redirectTo)}`, { method: "POST", body: JSON.stringify({ email: String(email || "").trim().toLowerCase(), password }) });
+  async function signUp(email, password, metadata = {}, redirectPath = "/verify") {
+    const redirectTo = new URL(redirectPath, window.location.origin).toString();
+    const result = await authRequest(`signup?redirect_to=${encodeURIComponent(redirectTo)}`, {
+      method: "POST",
+      body: JSON.stringify({ email: String(email || "").trim().toLowerCase(), password, data: metadata })
+    });
     if (result?.access_token) storeSession(result);
     return result;
+  }
+
+  async function resendVerification(email) {
+    const redirectTo = new URL("/verify", window.location.origin).toString();
+    return authRequest("resend", {
+      method: "POST",
+      body: JSON.stringify({ type: "signup", email: String(email || "").trim().toLowerCase(), email_redirect_to: redirectTo })
+    });
+  }
+
+  async function requestPasswordRecovery(email) {
+    const redirectTo = new URL("/reset-password", window.location.origin).toString();
+    return authRequest("recover", {
+      method: "POST",
+      body: JSON.stringify({ email: String(email || "").trim().toLowerCase(), redirect_to: redirectTo })
+    });
+  }
+
+  async function updatePassword(password) {
+    const session = await getSession();
+    if (!session?.access_token) throw new Error("PASSWORD_RECOVERY_SESSION_MISSING");
+    return authRequest("user", { method: "PUT", accessToken: session.access_token, body: JSON.stringify({ password }) });
   }
 
   function consumeAuthRedirect() {
@@ -137,24 +173,105 @@
     const session = await getSession();
     if (!session?.user?.id) return [];
     return request(
-      `restaurant_staff?select=id,restaurant_id,role,restaurants(id,slug,name,status)&user_id=eq.${encodeURIComponent(session.user.id)}`,
+      `restaurant_staff?select=id,restaurant_id,role,restaurants(id,slug,name,status,is_active,venue_status)&user_id=eq.${encodeURIComponent(session.user.id)}`,
       { accessToken: session.access_token }
     );
   }
 
-  async function getStaffProfile() {
+  async function provisionSelfServiceAccount(session = null) {
+    const activeSession = session || await getSession();
+    if (!activeSession?.access_token) return null;
+    return request("rpc/provision_self_service_account", {
+      method: "POST", accessToken: activeSession.access_token, body: JSON.stringify({})
+    });
+  }
+
+  async function getRestaurantEntitlement(restaurantId) {
+    const session = await getSession();
+    if (!session?.access_token || !restaurantId) throw new Error("Entitlement access requires a restaurant session.");
+    return request("rpc/get_restaurant_entitlement", {
+      method: "POST", accessToken: session.access_token, body: JSON.stringify({ p_restaurant_id: restaurantId })
+    });
+  }
+  async function getCurrentOnboarding() {
+    const session = await getSession();
+    return request("rpc/get_current_onboarding", { method: "POST", accessToken: session?.access_token, body: "{}" });
+  }
+  async function saveCurrentOnboardingStep(step, action, details = {}) {
+    const session = await getSession();
+    return request("rpc/save_current_onboarding_step", { method: "POST", accessToken: session?.access_token, body: JSON.stringify({ p_step: step, p_action: action, p_details: details }) });
+  }
+  async function completeCurrentOnboarding() {
+    const session = await getSession();
+    return request("rpc/complete_current_onboarding", { method: "POST", accessToken: session?.access_token, body: "{}" });
+  }
+  async function onboardingRpc(name, body = {}) { const session = await getSession(); return request(`rpc/${name}`, { method: "POST", accessToken: session?.access_token, body: JSON.stringify(body) }); }
+  function createSampleVenueData() { return onboardingRpc("create_sample_venue_data"); }
+  function removeSampleVenueData() { return onboardingRpc("remove_sample_venue_data"); }
+  function generateCurrentQrToken(tableId) { return onboardingRpc("generate_current_qr_token", { p_table_id: tableId }); }
+  function createOnboardingTestOrder() { return onboardingRpc("create_onboarding_test_order"); }
+  function completeOnboardingTestOrder(orderId) { return onboardingRpc("complete_onboarding_test_order", { p_order_id: orderId }); }
+  function activateCurrentVenue() { return onboardingRpc("activate_current_venue"); }
+  function getCurrentVenueReadiness() { return onboardingRpc("get_current_venue_readiness"); }
+  function getCurrentQrTables() { return onboardingRpc("get_current_qr_tables"); }
+  function revokeCurrentQrToken(tableId) { return onboardingRpc("revoke_current_qr_token", { p_table_id: tableId }); }
+  function publicTokenRpc(name, body) { return request(`rpc/${name}`, { method: "POST", body: JSON.stringify(body) }); }
+  function getPublicTenantContext(hostname = window.location.hostname) {
+    return publicTokenRpc("get_public_tenant_context", { p_hostname: String(hostname || "").toLowerCase().replace(/\.$/, "") });
+  }
+  function attendanceRpc(name, body) { return request(`rpc/${name}`, { method: "POST", body: JSON.stringify(body) }); }
+  function identifyAttendancePin(restaurantId, pin, deviceId) { return attendanceRpc("identify_attendance_pin", { p_restaurant_id: restaurantId, p_pin: pin, p_device_id: deviceId }); }
+  function sharedAttendanceAction(token, action) { return attendanceRpc("shared_attendance_action", { p_action_token: token, p_action: action }); }
+  function setStaffAttendancePin(restaurantId, staffUserId, pin, enabled = true) { return attendanceRpc("set_staff_attendance_pin", { p_restaurant_id: restaurantId, p_staff_user_id: staffUserId, p_pin: pin, p_enabled: enabled }); }
+  function getWeeklyAttendanceReport(restaurantId, filters) { return attendanceRpc("get_weekly_attendance_report", { p_restaurant_id: restaurantId, p_from: filters.from, p_to: filters.to, p_staff_user_id: filters.staffUserId || null, p_location: filters.location || null, p_shift_status: filters.shiftStatus || "all" }); }
+  function getAttendanceReportSettings(restaurantId) { return attendanceRpc("get_attendance_report_settings", { p_restaurant_id: restaurantId }); }
+  function updateAttendanceReportSettings(restaurantId, weekStartsOn) { return attendanceRpc("update_attendance_report_settings", { p_restaurant_id: restaurantId, p_week_starts_on: weekStartsOn }); }
+  function setAttendanceReportAccess(restaurantId, staffUserId, allowed) { return attendanceRpc("set_attendance_report_access", { p_restaurant_id: restaurantId, p_staff_user_id: staffUserId, p_allowed: allowed }); }
+  function getStaffClockLink(restaurantId) { return attendanceRpc("get_staff_clock_link", { p_restaurant_id: restaurantId }); }
+  function enableStaffClockLink(restaurantId, deviceLabel) { return attendanceRpc("enable_staff_clock_link", { p_restaurant_id: restaurantId, p_device_label: deviceLabel || "" }); }
+  function regenerateStaffClockLink(restaurantId, deviceLabel) { return attendanceRpc("regenerate_staff_clock_link", { p_restaurant_id: restaurantId, p_device_label: deviceLabel || "" }); }
+  function disableStaffClockLink(restaurantId) { return attendanceRpc("disable_staff_clock_link", { p_restaurant_id: restaurantId }); }
+  function getPublicStaffClockContext(publicToken) { return publicTokenRpc("get_public_staff_clock_context", { p_public_token: publicToken }); }
+  function identifyPublicStaffClockPin(publicToken, pin) { return publicTokenRpc("identify_public_staff_clock_pin", { p_public_token: publicToken, p_pin: pin }); }
+  function publicStaffClockAction(actionToken, action) { return publicTokenRpc("public_staff_clock_action", { p_action_token: actionToken, p_action: action }); }
+  function getPublicQrOrderContext(token) { return publicTokenRpc("get_public_qr_order_context", { p_token: token }); }
+  function submitPublicQrOrder(token, items, customerName, note, idempotencyKey) {
+    return publicTokenRpc("submit_public_qr_order", {
+      p_token: token,
+      p_items: items,
+      p_customer_name: customerName || "",
+      p_note: note || "",
+      p_idempotency_key: idempotencyKey
+    });
+  }
+  function getPublicQrOrderStatus(token, orderId) { return publicTokenRpc("get_public_qr_order_status", { p_token: token, p_order_id: orderId }); }
+
+  async function getStaffProfile({ preferActiveRestaurant = false } = {}) {
     const session = await getSession();
     if (!session?.user?.id) return null;
+    await provisionSelfServiceAccount(session);
     const memberships = await getMemberships();
     if (!memberships.length) {
       const error = new Error("ONBOARDING_REQUIRED");
       error.code = "ONBOARDING_REQUIRED";
       throw error;
     }
-    const slug = routeContext().restaurantSlug;
-    const membership = memberships.find((entry) => entry.restaurants?.slug === slug) || (!slug ? memberships[0] : null);
+    const route = routeContext();
+    // The root sign-in page has no restaurant context. Do not treat its
+    // configured demo/default slug as an access requirement; choose one of
+    // the account's actual memberships and let the app redirect there.
+    const slug = ["dashboard", "kitchen", "frontdesk", "reports", "attendance", "setup", "order", "restaurant", "staff"].includes(route.area)
+      ? route.restaurantSlug
+      : "";
+    const membershipRestaurant = (entry) => Array.isArray(entry.restaurants) ? entry.restaurants[0] : entry.restaurants;
+    const membership = (!preferActiveRestaurant && memberships.find((entry) => membershipRestaurant(entry)?.slug === slug)) || ((!slug || preferActiveRestaurant)
+      ? memberships.find((entry) => {
+        const restaurant = membershipRestaurant(entry);
+        return restaurant?.status === "active" || restaurant?.is_active === true;
+      }) || memberships[0]
+      : null);
     if (!membership) throw new Error("This account does not have access to this restaurant.");
-    const related = Array.isArray(membership.restaurants) ? membership.restaurants[0] : membership.restaurants;
+    const related = membershipRestaurant(membership);
     activeMembership = { restaurantId: membership.restaurant_id, restaurantSlug: related?.slug, role: membership.role };
     return {
       id: session.user.id,
@@ -163,6 +280,7 @@
       restaurantSlug: related?.slug || slug,
       restaurantName: related?.name || "Restaurant",
       restaurantStatus: related?.status || "active",
+      venueStatus: related?.venue_status || "",
       role: membership.role
     };
   }
@@ -281,6 +399,11 @@
     const session = await getSession();
     return request("rpc/create_restaurant_tables", { method: "POST", accessToken: session?.access_token, body: JSON.stringify({ p_restaurant_id: restaurantId, p_count: Number(count) }) });
   }
+  function createCurrentOnboardingTables(count) {
+    const tenantId = activeMembership?.restaurantId;
+    if (!tenantId) throw new Error("Restaurant context is missing.");
+    return createTables(tenantId, count);
+  }
 
   async function ensureCategory(restaurantId, name, sortOrder = 0) {
     const session = await getSession();
@@ -358,7 +481,7 @@
     const session = await getSession();
     if (!session) throw new Error("Staff login is required.");
     return request(
-      `orders?select=id,local_id,order_number,restaurant_id,table_id,customer_name,status,note,subtotal,tax,total,payment_method,paid_at,created_at,served_at,closed_at,tables(local_id,table_name),order_items(id,menu_item_id,item_name,price,quantity,notes,options)&restaurant_id=eq.${encodeURIComponent(restaurantId)}&order=created_at.desc&limit=500`,
+      `orders?select=id,local_id,order_number,restaurant_id,table_id,customer_name,status,payment_status,note,subtotal,tax,total,payment_method,paid_at,created_at,served_at,closed_at,voided_at,void_reason,tables(local_id,table_name),order_items(id,menu_item_id,item_name,price,quantity,notes,options,status,voided_at,void_reason)&restaurant_id=eq.${encodeURIComponent(restaurantId)}&order=created_at.desc&limit=500`,
       { accessToken: session.access_token }
     );
   }
@@ -398,40 +521,107 @@
     const session = await getSession();
     const tenantId = restaurantId || activeMembership?.restaurantId;
     if (!session || !tenantId) throw new Error("Restaurant context is missing.");
-    try {
-      return await request("rpc/update_restaurant_order_status", {
-        method: "POST",
-        accessToken: session.access_token,
-        body: JSON.stringify({ p_restaurant_id: tenantId, p_order_id: orderId, p_action: status })
-      });
-    } catch (error) {
-      const migrationMissing = error.status === 404 || /update_restaurant_order_status|schema cache|could not find/i.test(error.message);
-      if (!migrationMissing) throw error;
-      const statusToDatabase = { Preparing: "preparing", Ready: "ready", Served: "completed", Paid: "completed", Cancelled: "cancelled" };
-      const body = { status: statusToDatabase[status] || String(status).toLowerCase() };
-      const timestamp = new Date().toISOString();
-      if (status === "Served") body.served_at = timestamp;
-      if (["Paid", "Cancelled"].includes(status)) body.closed_at = timestamp;
-      return scopedPatch("orders", orderId, tenantId, body);
-    }
-  }
-
-  async function recordOrderPayment(orderId, payment, restaurantId) {
-    const session = await getSession();
-    const tenantId = restaurantId || activeMembership?.restaurantId;
-    if (!session || !tenantId) throw new Error("Restaurant context is missing.");
-    return request("rpc/record_restaurant_order_payment", {
+    return request("rpc/update_restaurant_order_status", {
       method: "POST",
       accessToken: session.access_token,
-      body: JSON.stringify({
-        p_restaurant_id: tenantId,
-        p_order_id: orderId,
-        p_method: payment.method || "Other"
-      })
+      body: JSON.stringify({ p_restaurant_id: tenantId, p_order_id: orderId, p_action: status })
     });
   }
 
+  async function touchStaffPresence(restaurantId) {
+    const session = await getSession();
+    if (!session?.access_token || !restaurantId) return;
+    return request("rpc/touch_staff_presence", {
+      method: "POST", accessToken: session.access_token,
+      body: JSON.stringify({ p_restaurant_id: restaurantId })
+    });
+  }
+
+  async function recordFrontdeskPayment(orderId, payment, restaurantId) {
+    const session = await getSession();
+    const tenantId = restaurantId || activeMembership?.restaurantId;
+    if (!session || !tenantId) throw new Error("Restaurant context is missing.");
+    return request("rpc/record_authoritative_payment", {
+      method: "POST", accessToken: session.access_token,
+      body: JSON.stringify({ p_restaurant_id: tenantId, p_order_id: orderId, p_amount_cents: payment.amountCents, p_method: payment.method, p_reference: payment.reference || "", p_note: payment.note || "", p_idempotency_key: payment.idempotencyKey })
+    });
+  }
+
+  async function loadFrontdeskPayments(restaurantId) {
+    const session = await getSession();
+    if (!session || !restaurantId) return [];
+    return request("rpc/list_authoritative_payment_operations", { method: "POST", accessToken: session.access_token,
+      body: JSON.stringify({ p_restaurant_id: restaurantId }) });
+  }
+
+  async function voidOrder(orderId, reason, note = "", managerPin = null, restaurantId) {
+    const session = await getSession(); const tenantId = restaurantId || activeMembership?.restaurantId;
+    if (!session || !tenantId) throw new Error("Restaurant context is missing.");
+    return request("rpc/void_restaurant_order", { method: "POST", accessToken: session.access_token, body: JSON.stringify({ p_restaurant_id: tenantId, p_order_id: orderId, p_reason: reason, p_note: note, p_manager_pin: managerPin }) });
+  }
+  async function voidOrderItem(orderItemId, reason, note = "", managerPin = null, restaurantId) {
+    const session = await getSession(); const tenantId = restaurantId || activeMembership?.restaurantId;
+    if (!session || !tenantId) throw new Error("Restaurant context is missing.");
+    return request("rpc/void_restaurant_order_item", { method: "POST", accessToken: session.access_token, body: JSON.stringify({ p_restaurant_id: tenantId, p_order_item_id: orderItemId, p_reason: reason, p_note: note, p_manager_pin: managerPin }) });
+  }
+  async function voidOrderItems(orderItemIds, reason, note = "", managerPin = null, restaurantId) {
+    const session = await getSession(); const tenantId = restaurantId || activeMembership?.restaurantId;
+    if (!session || !tenantId) throw new Error("Restaurant context is missing.");
+    return request("rpc/void_restaurant_order_items", { method: "POST", accessToken: session.access_token, body: JSON.stringify({ p_restaurant_id: tenantId, p_order_item_ids: orderItemIds, p_reason: reason, p_note: note, p_manager_pin: managerPin }) });
+  }
+  async function getOrderActivity(orderId, restaurantId) {
+    const session = await getSession(); const tenantId = restaurantId || activeMembership?.restaurantId;
+    if (!session || !tenantId) throw new Error("Restaurant context is missing.");
+    return request("rpc/get_order_activity", { method: "POST", accessToken: session.access_token, body: JSON.stringify({ p_restaurant_id: tenantId, p_order_id: orderId }) });
+  }
+
   function updateMenuItemPhoto(id, photoUrl, restaurantId) { return scopedPatch("menu_items", id, restaurantId, { image_url: photoUrl || "", photo_url: photoUrl || "" }); }
+  async function uploadMenuItemPhoto(file, restaurantId) {
+    const session = await getSession();
+    const tenantId = restaurantId || activeMembership?.restaurantId;
+    if (!session?.access_token || !tenantId) throw new Error("Restaurant context is missing.");
+    if (!(file instanceof File)) throw new Error("Choose an image file first.");
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error("Use a JPG, PNG, or WebP image.");
+    if (file.size > 5 * 1024 * 1024) throw new Error("Image must be 5 MB or smaller.");
+
+    const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[file.type];
+    const filename = `${tenantId}/${crypto.randomUUID()}.${extension}`;
+    const response = await fetch(`${config.url}/storage/v1/object/menu-images/${filename}`, {
+      method: 'POST',
+      headers: {
+        apikey: config.publishableKey,
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': file.type,
+        'x-upsert': 'false'
+      },
+      body: file
+    });
+    await parseResponse(response);
+    return `${config.url}/storage/v1/object/public/menu-images/${filename}`;
+  }
+  async function uploadBrandingLogo(file, restaurantId) {
+    const session = await getSession();
+    const tenantId = restaurantId || activeMembership?.restaurantId;
+    if (!session?.access_token || !tenantId) throw new Error("Restaurant context is missing.");
+    if (!(file instanceof File)) throw new Error("Choose a logo image first.");
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error("Use a JPG, PNG, or WebP logo.");
+    if (file.size > 5 * 1024 * 1024) throw new Error("Logo must be 5 MB or smaller.");
+
+    const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[file.type];
+    const filename = `${tenantId}/branding/${crypto.randomUUID()}.${extension}`;
+    const response = await fetch(`${config.url}/storage/v1/object/menu-images/${filename}`, {
+      method: 'POST',
+      headers: {
+        apikey: config.publishableKey,
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': file.type,
+        'x-upsert': 'false'
+      },
+      body: file
+    });
+    await parseResponse(response);
+    return `${config.url}/storage/v1/object/public/menu-images/${filename}`;
+  }
   function updateMenuItemSoldOut(id, soldOut, restaurantId) { return scopedPatch("menu_items", id, restaurantId, { sold_out: Boolean(soldOut), is_available: !soldOut }); }
   function deactivateMenuItem(id, restaurantId) { return scopedPatch("menu_items", id, restaurantId, { is_active: false, is_available: false }); }
 
@@ -460,13 +650,15 @@
   }
 
   window.TableOrderCloud = {
-    config, routeContext, request, checkConnection, loadRestaurantData, bootstrapMenu, submitOrder, loadCustomerOrderStatus,
-    loadOrders, updateOrderStatus, recordOrderPayment, updateMenuItemPhoto, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
+    config, routeContext, request, checkConnection, loadRestaurantData, getPublicTenantContext, bootstrapMenu, submitOrder, loadCustomerOrderStatus,
+    loadOrders, loadFrontdeskPayments, updateOrderStatus, recordFrontdeskPayment, voidOrder, voidOrderItem, voidOrderItems, getOrderActivity, updateMenuItemPhoto, uploadMenuItemPhoto, uploadBrandingLogo, updateMenuItemSoldOut, createMenuItem, deactivateMenuItem,
     loadReportDashboard, loadSalesReport, loadMenuReport, loadTableReport, loadHourlyReport, loadOrderReport,
     createRestaurantTable, updateRestaurantTable, deactivateRestaurantTable, updateRestaurantProfile,
-    signUp, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, signOut,
+    signUp, resendVerification, requestPasswordRecovery, updatePassword, signInWithPassword, consumeAuthRedirect, getSession, getMemberships, getStaffProfile, getPlatformProfile, provisionSelfServiceAccount, getRestaurantEntitlement, getCurrentOnboarding, saveCurrentOnboardingStep, completeCurrentOnboarding, createSampleVenueData, removeSampleVenueData, generateCurrentQrToken, getCurrentQrTables, revokeCurrentQrToken, createOnboardingTestOrder, completeOnboardingTestOrder, activateCurrentVenue, getCurrentVenueReadiness, getPublicQrOrderContext, submitPublicQrOrder, getPublicQrOrderStatus, signOut,
     loadPlatformRestaurants, platformCreateRestaurant,
-    createRestaurant, createTables, importSampleMenu, completeOnboarding,
-    createRestaurantInvite, acceptRestaurantInvite, listRestaurantTeam, revokeRestaurantInvite
+    createRestaurant, createTables, createCurrentOnboardingTables, importSampleMenu, completeOnboarding,
+    createRestaurantInvite, acceptRestaurantInvite, listRestaurantTeam, touchStaffPresence, revokeRestaurantInvite,
+    identifyAttendancePin, sharedAttendanceAction, setStaffAttendancePin, getStaffClockLink, enableStaffClockLink, regenerateStaffClockLink, disableStaffClockLink, getPublicStaffClockContext, identifyPublicStaffClockPin, publicStaffClockAction,
+    getWeeklyAttendanceReport, getAttendanceReportSettings, updateAttendanceReportSettings, setAttendanceReportAccess
   };
 })();

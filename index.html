@@ -10,12 +10,32 @@
     <meta name="format-detection" content="telephone=no" />
     <title>Aveniq Restaurant Ordering</title>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="/styles.css?v=20260716-2" />
+    <link rel="icon" href="/assets/brand/aveniq-leaf-logo-reverse.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/assets/brand/aveniq-leaf-logo-reverse.png" />
+    <style id="app-startup-visibility-guard">
+      /* Prevent the app shell from painting before authentication routing is resolved. */
+      body.app-starting > .app-header,
+      body.app-starting > .tabs,
+      body.app-starting > main,
+      body.app-starting > .mobile-bottom-nav,
+      body.app-starting > .mobile-cart-dock { visibility: hidden; pointer-events: none; }
+    </style>
+    <link rel="stylesheet" href="/styles.css?v=20260812-ui-audit" />
   </head>
-  <body>
+  <body class="app-starting">
+    <div class="offline-banner hidden" id="offlineBanner" role="status" aria-live="polite">You are offline. Changes cannot be saved until you reconnect.</div>
+    <main class="external-staff-clock hidden" id="externalStaffClock" aria-live="polite">
+      <section class="external-staff-clock-card">
+        <div class="shared-clock-brand">AVENIQ</div>
+        <p class="eyebrow">Staff Clock</p>
+        <h1 id="externalStaffClockRestaurant">Loading…</h1>
+        <p class="attendance-meta" id="externalStaffClockLabel"></p>
+        <div id="externalStaffClockContent"></div>
+      </section>
+    </main>
     <section class="account-gateway hidden" id="accountGateway" aria-live="polite">
       <div class="gateway-brand">
-        <span class="gateway-mark">A</span>
+        <img class="gateway-mark" src="/assets/brand/aveniq-leaf-logo-reverse.png" alt="Aveniq logo" />
         <strong>Aveniq</strong>
         <span>Restaurant ordering, ready in minutes.</span>
       </div>
@@ -35,7 +55,66 @@
           </label>
           <p class="auth-error hidden" id="ownerAuthError" role="alert"></p>
           <button class="submit-button" id="ownerAuthSubmit" type="submit">Log in</button>
+          <p class="muted"><a href="/signup">Create a new Aveniq account</a></p>
+          <p class="muted"><a href="/forgot-password">Forgot your password?</a></p>
         </form>
+      </section>
+
+      <section class="auth-gateway-card hidden" id="signupPanel">
+        <p class="eyebrow">Start with Aveniq</p>
+        <h1>Create your account</h1>
+        <p class="muted">Set up your account now. We will ask about your venue after your email is verified.</p>
+        <form class="auth-form" id="signupForm" novalidate>
+          <label class="field"><span>Full name</span><input id="signupFullName" name="fullName" autocomplete="name" required maxlength="120" /></label>
+          <label class="field"><span>Business name</span><input id="signupBusinessName" name="businessName" autocomplete="organization" required maxlength="160" /></label>
+          <label class="field"><span>Email address</span><input id="signupEmail" name="email" type="email" autocomplete="email" required maxlength="254" autocapitalize="none" spellcheck="false" /></label>
+          <label class="field"><span>Password</span><input id="signupPassword" name="password" type="password" autocomplete="new-password" required minlength="12" aria-describedby="signupPasswordHelp" /></label>
+          <p class="muted" id="signupPasswordHelp">Use at least 12 characters, including uppercase, lowercase, a number and a symbol.</p>
+          <label class="field"><span>Confirm password</span><input id="signupConfirmPassword" name="confirmPassword" type="password" autocomplete="new-password" required /></label>
+          <label class="field"><span>Country</span><input id="signupCountry" name="country" autocomplete="country-name" required maxlength="100" /></label>
+          <label class="field"><span><input id="signupTerms" name="terms" type="checkbox" required /> I accept the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a>.</span></label>
+          <label class="field"><span><input id="signupPrivacy" name="privacy" type="checkbox" required /> I accept the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+          <p class="auth-error hidden" id="signupError" role="alert"></p>
+          <button class="submit-button" id="signupSubmit" type="submit">Create account</button>
+          <p class="muted">Already have an account? <a href="/login">Log in</a></p>
+        </form>
+      </section>
+
+      <section class="auth-gateway-card hidden" id="verificationPanel">
+        <p class="eyebrow">Email verification</p>
+        <h1 id="verificationTitle">Check your email</h1>
+        <p class="muted" id="verificationDescription">We sent a verification link to your email address. Verify it before signing in.</p>
+        <form class="auth-form" id="resendVerificationForm">
+          <label class="field"><span>Email address</span><input id="resendVerificationEmail" type="email" autocomplete="email" required /></label>
+          <p class="auth-error hidden" id="verificationError" role="alert"></p>
+          <button class="submit-button" id="resendVerificationSubmit" type="submit">Resend verification email</button>
+          <p class="muted"><a href="/login">Return to login</a></p>
+        </form>
+      </section>
+
+      <section class="auth-gateway-card hidden" id="passwordRecoveryPanel">
+        <p class="eyebrow">Account recovery</p>
+        <h1 id="passwordRecoveryTitle">Reset your password</h1>
+        <p class="muted" id="passwordRecoveryDescription">Enter your email address and we will send a password-reset link if an account is eligible.</p>
+        <form class="auth-form" id="passwordRecoveryForm">
+          <label class="field" id="passwordRecoveryEmailField"><span>Email address</span><input id="passwordRecoveryEmail" type="email" autocomplete="email" required /></label>
+          <label class="field hidden" id="passwordRecoveryNewField"><span>New password</span><input id="passwordRecoveryNew" type="password" autocomplete="new-password" minlength="12" /></label>
+          <label class="field hidden" id="passwordRecoveryConfirmField"><span>Confirm new password</span><input id="passwordRecoveryConfirm" type="password" autocomplete="new-password" /></label>
+          <p class="auth-error hidden" id="passwordRecoveryError" role="alert"></p>
+          <button class="submit-button" id="passwordRecoverySubmit" type="submit">Send reset link</button>
+          <p class="muted"><a href="/login">Return to login</a></p>
+        </form>
+      </section>
+
+      <section class="auth-gateway-card hidden" id="provisioningRecoveryPanel">
+        <p class="eyebrow">Restaurant setup</p>
+        <h1>We’re preparing your restaurant</h1>
+        <p class="muted">This usually takes only a few seconds. Please try again to finish preparing your 90-day free trial.</p>
+        <p class="auth-error hidden" id="provisioningRecoveryError" role="alert"></p>
+        <div class="auth-form">
+          <button class="submit-button" id="retryProvisioning" type="button">Try again</button>
+          <button class="ghost-button" id="provisioningSignOut" type="button">Sign out</button>
+        </div>
       </section>
 
       <section class="auth-gateway-card invite-gateway-card hidden" id="inviteAuthPanel">
@@ -92,6 +171,30 @@
             </div>
           </section>
         </div>
+
+        <section class="platform-panel platform-team-panel hidden" id="platformTeamPanel">
+          <div class="panel-title">
+            <div>
+              <p class="eyebrow">Restaurant access</p>
+              <h2 id="platformTeamRestaurantName">Restaurant team</h2>
+              <p class="muted" id="platformTeamRestaurantDescription">Choose a restaurant to manage its team.</p>
+            </div>
+            <div class="toolbar-actions">
+              <button class="ghost-button" id="closePlatformTeam" type="button">Close</button>
+              <button class="ghost-button" id="refreshPlatformTeam" type="button">Refresh</button>
+            </div>
+          </div>
+          <form class="team-invite-form" id="platformRestaurantInviteForm">
+            <label class="field"><span>Email address</span><input id="platformRestaurantInviteEmail" type="email" required placeholder="staff@restaurant.com" /></label>
+              <label class="field"><span>Role</span><select id="platformRestaurantInviteRole"><option value="staff">All-round Staff</option><option value="manager">Manager</option><option value="kitchen">Kitchen</option><option value="cashier">Cashier</option><option value="waitstaff">Waitstaff</option><option value="attendance">Attendance only</option><option value="owner">Owner</option></select></label>
+            <button class="primary-button" id="createPlatformRestaurantInvite" type="submit">Create invite link</button>
+          </form>
+          <p class="auth-error hidden" id="platformTeamError" role="alert"></p>
+          <div class="team-columns">
+            <div><h3>Active team</h3><div class="team-list" id="platformTeamList"><div class="empty-state">Choose a restaurant to load its team.</div></div></div>
+            <div><h3>Pending invites</h3><div class="team-list" id="platformInviteList"><div class="empty-state">No pending invites.</div></div></div>
+          </div>
+        </section>
       </section>
 
       <section class="onboarding-shell hidden" id="onboardingWizard">
@@ -189,7 +292,7 @@
           <span class="sync-detail" id="cloudSyncDetail">Not synced yet</span>
         </div>
         <button class="ghost-button sound-toggle" id="soundToggle" type="button" aria-label="Toggle kitchen order sound" aria-pressed="false" title="Kitchen order sound is off">Sound Off</button>
-        <button class="ghost-button header-login-button" id="staffLoginButton" type="button">Staff Login</button>
+        <a class="ghost-button header-login-button" id="staffLoginButton" href="/staff">Staff Login</a>
         <div class="staff-identity hidden" id="staffIdentity">
           <div>
             <strong id="staffName">Staff</strong>
@@ -199,6 +302,8 @@
         </div>
         <button class="primary-button" id="printBillTop">Print Bill</button>
       </div>
+      <button class="mobile-header-menu hidden" id="mobileHeaderMenu" type="button" aria-label="Open account menu" aria-expanded="false">Menu</button>
+      <button class="customer-theme-toggle" id="customerThemeToggle" type="button" aria-label="Switch theme" aria-pressed="false" title="Switch theme">◐</button>
     </header>
 
     <nav class="tabs" aria-label="Application sections">
@@ -206,6 +311,7 @@
       <button class="tab" data-view="kitchen">Kitchen</button>
       <button class="tab" data-view="frontdesk">Front Desk</button>
       <button class="tab" data-view="reports">Reports</button>
+      <button class="tab" data-view="attendance">Attendance</button>
       <button class="tab" data-view="setup">Admin</button>
     </nav>
 
@@ -224,9 +330,18 @@
         <div class="category-row" id="categoryRow"></div>
 
         <div class="customer-layout">
-          <section class="menu-grid" id="menuGrid" aria-label="Menu items"></section>
+          <section class="customer-menu-column" aria-label="Menu">
+            <div class="customer-menu-heading">
+              <div>
+                <p class="eyebrow">Table ordering</p>
+                <h2>Menu</h2>
+              </div>
+              <span>Tap + to add</span>
+            </div>
+            <div class="menu-grid" id="menuGrid" aria-label="Menu items"></div>
 
-          <section class="also-ordered" id="alsoOrdered" aria-label="Customers also ordered"></section>
+            <section class="also-ordered" id="alsoOrdered" aria-label="Customers also ordered"></section>
+          </section>
 
           <aside class="order-panel" aria-label="Current cart">
             <div class="panel-title">
@@ -257,7 +372,7 @@
       </section>
 
       <section id="kitchen" class="view">
-        <div class="toolbar">
+        <div class="toolbar operations-page-header">
           <div>
             <p class="eyebrow">Live kitchen docket</p>
             <h2>Kitchen Orders</h2>
@@ -272,14 +387,14 @@
       </section>
 
       <section id="frontdesk" class="view">
-        <div class="frontdesk-layout">
+        <div class="frontdesk-layout operations-workspace">
           <aside class="table-list" id="frontTableList" aria-label="Open tables"></aside>
           <section class="invoice-panel" id="invoicePanel" aria-label="Invoice"></section>
         </div>
       </section>
 
       <section id="reports" class="view">
-        <div class="toolbar">
+        <div class="toolbar ds-page-header report-page-header">
           <div>
             <p class="eyebrow">Restaurant performance</p>
             <h2>Reports</h2>
@@ -290,7 +405,7 @@
           </div>
         </div>
 
-        <section class="report-controls" aria-label="Report date range">
+        <section class="report-controls ds-section-card" aria-label="Report date range">
           <div class="report-range-presets" id="reportRangePresets">
             <button class="report-filter active" type="button" data-report-range="today">Today</button>
             <button class="report-filter" type="button" data-report-range="yesterday">Yesterday</button>
@@ -317,12 +432,79 @@
         </div>
 
         <div class="report-status" id="reportStatus" role="status" aria-live="polite"></div>
-        <section class="report-workspace setup-panel" id="reportWorkspace" aria-live="polite"></section>
+        <section class="report-workspace setup-panel ds-section-card" id="reportWorkspace" aria-live="polite"></section>
+      </section>
+
+      <section id="attendance" class="view">
+        <div class="attendance-header ds-page-header">
+          <div>
+            <p class="eyebrow">Team time</p>
+            <h2>Attendance</h2>
+            <p class="muted" id="attendanceDateLabel"></p>
+          </div>
+          <div class="toolbar-actions">
+            <button class="primary-button" id="openSharedClock" type="button">Open Staff Clock</button>
+            <button class="ghost-button hidden" id="openAttendanceReports" type="button">Attendance Reports</button>
+            <button class="ghost-button" id="exportAttendanceCsv" type="button">Export CSV</button>
+            <button class="ghost-button" id="refreshAttendance" type="button">Refresh</button>
+          </div>
+        </div>
+        <div class="attendance-metrics" id="attendanceMetrics"></div>
+        <section class="attendance-card staff-clock-link-card hidden" id="staffClockLinkPanel"><div class="panel-title"><div><p class="eyebrow">Attendance → Staff Clock Link</p><h3>External Staff Clock</h3><p class="muted">A PIN-only link for a shared desktop or iPad.</p></div><span class="status-pill" id="staffClockLinkStatus">Disabled</span></div><div class="staff-clock-link-controls"><label class="field"><span>Location / device label (optional)</span><input id="staffClockLinkLabel" maxlength="120" placeholder="Front Counter" /></label><div class="toolbar-actions"><button class="primary-button" id="enableStaffClockLink" type="button">Enable External Staff Clock</button><button class="ghost-button" id="openStaffClockLink" type="button">Open Staff Clock</button><button class="ghost-button" id="copyStaffClockLink" type="button">Copy Link</button><button class="ghost-button" id="regenerateStaffClockLink" type="button">Regenerate Link</button><button class="ghost-button" id="disableStaffClockLink" type="button">Disable Link</button></div></div><p class="attendance-meta" id="staffClockLinkMeta"></p><p class="auth-error hidden" id="staffClockLinkError" role="alert"></p></section>
+        <div class="attendance-grid">
+          <section class="attendance-card attendance-clock-card" id="myAttendanceCard" aria-live="polite"></section>
+          <section class="attendance-card attendance-live-card">
+            <div class="panel-title"><div><p class="eyebrow">Live floor</p><h3>Staff working now</h3></div><span class="status-pill ready" id="attendanceLiveCount">0 on duty</span></div>
+            <div class="attendance-list" id="attendanceLiveList"></div>
+          </section>
+        </div>
+        <section class="attendance-card attendance-history-card">
+          <div class="panel-title"><div><p class="eyebrow">This week</p><h3>Shift history</h3></div><span class="muted" id="attendanceWeekTotal"></span></div>
+          <div class="attendance-history" id="attendanceHistory"></div>
+        </section>
+        <section class="attendance-card attendance-manager-card hidden" id="attendanceManagerCard">
+          <div class="panel-title"><div><p class="eyebrow">Exceptions</p><h3>Manager review</h3><p class="muted">Edits are recorded with who changed them and why.</p></div></div>
+          <div class="attendance-list" id="attendanceManagerList"></div>
+        </section>
+        <section class="attendance-report-panel hidden" id="attendanceReportsPanel" aria-live="polite">
+          <div class="panel-title"><div><p class="eyebrow">Attendance → Reports</p><h3>Weekly staff hours</h3><p class="muted" id="attendanceReportRangeLabel"></p></div><div class="toolbar-actions"><button class="ghost-button" id="closeAttendanceReports" type="button">Close</button><button class="ghost-button" id="attendanceReportExportDetail" type="button">Detailed CSV</button><button class="ghost-button" id="attendanceReportExportSummary" type="button">Weekly CSV</button></div></div>
+          <div class="attendance-report-controls">
+            <button class="ghost-button" id="attendanceReportPrevious" type="button">← Previous</button><button class="ghost-button" id="attendanceReportNext" type="button">Next →</button>
+            <label class="field"><span>From</span><input type="date" id="attendanceReportFrom"></label><label class="field"><span>To</span><input type="date" id="attendanceReportTo"></label>
+            <label class="field"><span>Staff</span><select id="attendanceReportStaff"><option value="">All staff</option></select></label><label class="field"><span>Location</span><select id="attendanceReportLocation"><option value="">All locations</option></select></label><label class="field"><span>Shift status</span><select id="attendanceReportShiftStatus"><option value="all">All shifts</option><option value="completed">Completed</option><option value="open">Open / missed clock-out</option><option value="review">Needs review</option></select></label>
+            <button class="primary-button" id="attendanceReportApply" type="button">Apply</button>
+          </div>
+          <div class="attendance-report-status" id="attendanceReportStatus" role="status"></div><div class="attendance-report-metrics" id="attendanceReportMetrics"></div>
+          <div class="attendance-report-warning hidden" id="attendanceReportWarning"></div>
+          <div class="attendance-report-table-wrap"><table class="attendance-report-table"><thead id="attendanceReportHead"></thead><tbody id="attendanceReportBody"></tbody></table></div>
+          <section class="attendance-report-settings hidden" id="attendanceReportSettings"><div><strong>Report settings</strong><p class="muted">Clock-in and breaks are unrounded. Completed clock-outs round down to 15 minutes in the venue timezone.</p></div><label class="field"><span>Week starts on</span><select id="attendanceReportWeekStarts"><option value="1">Monday</option><option value="0">Sunday</option><option value="6">Saturday</option></select></label><button class="ghost-button" id="saveAttendanceReportSettings" type="button">Save setting</button></section>
+        </section>
       </section>
 
       <section id="setup" class="view">
-        <div class="setup-grid">
-          <section class="setup-panel wide-panel database-panel">
+        <div class="admin-layout">
+          <header class="ds-page-header admin-page-header">
+            <div>
+              <p class="eyebrow">Restaurant administration</p>
+              <h2>Manage your restaurant</h2>
+              <p class="muted">Keep your venue, menu, tables and team ready for service.</p>
+            </div>
+          </header>
+          <nav class="admin-settings-nav" aria-label="Restaurant administration sections">
+            <button class="admin-settings-nav-item active" type="button" data-admin-section="overview" aria-pressed="true">Overview</button>
+            <button class="admin-settings-nav-item" type="button" data-admin-section="menu" aria-pressed="false">Menu</button>
+            <button class="admin-settings-nav-item" type="button" data-admin-section="restaurant" aria-pressed="false">Restaurant</button>
+            <button class="admin-settings-nav-item" type="button" data-admin-section="team" aria-pressed="false">Team</button>
+            <button class="admin-settings-nav-item" type="button" data-admin-section="tables" aria-pressed="false">Tables</button>
+          </nav>
+          <nav class="admin-menu-nav hidden" id="adminMenuNav" aria-label="Menu management sections">
+            <button class="admin-menu-nav-item active" type="button" data-menu-section="status" aria-pressed="true">Availability</button>
+            <button class="admin-menu-nav-item" type="button" data-menu-section="add" aria-pressed="false">Add item</button>
+            <button class="admin-menu-nav-item" type="button" data-menu-section="theme" aria-pressed="false">Menu theme</button>
+            <button class="admin-menu-nav-item" type="button" data-menu-section="import" aria-pressed="false">Import</button>
+          </nav>
+          <div class="setup-grid" id="adminSettingsContent">
+          <section class="setup-panel ds-section-card wide-panel database-panel" data-admin-panel="overview">
             <div class="panel-title">
               <div>
                 <p class="eyebrow">Cloud database</p>
@@ -344,7 +526,26 @@
             </div>
           </section>
 
-          <section class="setup-panel wide-panel team-panel" id="teamManagementPanel">
+          <section class="setup-panel ds-section-card" id="planEntitlementPanel" data-admin-panel="overview" aria-live="polite">
+            <div class="panel-title">
+              <div>
+                <p class="eyebrow">Organisation plan</p>
+                <h2 id="planEntitlementTitle">Loading plan…</h2>
+              </div>
+              <span class="status-pill" id="planEntitlementStatus">Checking</span>
+            </div>
+            <p class="muted" id="planEntitlementDates">Checking entitlement details…</p>
+            <div class="team-list" id="planEntitlementUsage"></div>
+            <button class="ghost-button" type="button" disabled>Upgrade options coming soon</button>
+          </section>
+
+          <section class="setup-panel ds-section-card" id="onboardingChecklistPanel" data-admin-panel="overview" aria-live="polite" hidden>
+            <div class="panel-title"><div><p class="eyebrow">Complete your setup</p><h2>Onboarding checklist</h2></div><span class="status-pill" id="onboardingChecklistPercent">0%</span></div>
+            <p class="muted" id="onboardingChecklistSummary">Loading saved setup progressâ€¦</p>
+            <div class="team-list" id="onboardingChecklistItems"></div>
+          </section>
+
+          <section class="setup-panel ds-section-card wide-panel team-panel" id="teamManagementPanel" data-admin-panel="team">
             <div class="panel-title">
               <div>
                 <p class="eyebrow">Access and roles</p>
@@ -355,17 +556,17 @@
             </div>
             <form class="team-invite-form" id="restaurantInviteForm">
               <label class="field"><span>Email address</span><input id="restaurantInviteEmail" type="email" required placeholder="staff@restaurant.com" /></label>
-              <label class="field"><span>Role</span><select id="restaurantInviteRole"><option value="staff">All-round Staff</option><option value="manager">Manager</option><option value="kitchen">Kitchen</option><option value="cashier">Cashier</option><option value="owner">Owner</option></select></label>
+              <label class="field"><span>Role</span><select id="restaurantInviteRole"><option value="staff">All-round Staff</option><option value="manager">Manager</option><option value="kitchen">Kitchen</option><option value="cashier">Cashier</option><option value="waitstaff">Waitstaff</option><option value="attendance">Attendance only</option><option value="owner">Owner</option></select></label>
               <button class="primary-button" id="createRestaurantInvite" type="submit">Create invite link</button>
             </form>
             <p class="auth-error hidden" id="restaurantTeamError" role="alert"></p>
             <div class="team-columns">
-              <div><h3>Active team</h3><div class="team-list" id="restaurantTeamList"><div class="empty-state">Loading team…</div></div></div>
+              <div><h3>Staff status</h3><div class="team-list" id="restaurantTeamList"><div class="empty-state">Loading team…</div></div></div>
               <div><h3>Pending invites</h3><div class="team-list" id="restaurantInviteList"><div class="empty-state">No pending invites.</div></div></div>
             </div>
           </section>
 
-          <section class="setup-panel">
+          <section class="setup-panel ds-section-card" data-admin-panel="tables">
             <div class="panel-title">
               <h2>Tables</h2>
               <div class="toolbar-actions">
@@ -376,7 +577,7 @@
             <div class="qr-sheet" id="qrSheet"></div>
           </section>
 
-          <section class="setup-panel">
+          <section class="setup-panel ds-section-card" data-admin-panel="tables">
             <div class="panel-title">
               <div>
                 <p class="eyebrow">Restaurant admin</p>
@@ -393,7 +594,7 @@
             <div class="table-admin-list" id="tableAdminList"></div>
           </section>
 
-          <section class="setup-panel">
+          <section class="setup-panel ds-section-card" data-admin-panel="menu" data-menu-panel="status">
             <div class="panel-title">
               <h2>Menu Status</h2>
               <button class="ghost-button" id="resetDemo">Reset Demo</button>
@@ -401,7 +602,7 @@
             <div id="menuStatus"></div>
           </section>
 
-          <section class="setup-panel wide-panel">
+          <section class="setup-panel ds-section-card wide-panel" data-admin-panel="restaurant">
             <div class="panel-title">
               <div>
                 <p class="eyebrow">Restaurant admin</p>
@@ -451,7 +652,7 @@
             </form>
           </section>
 
-          <section class="setup-panel wide-panel">
+          <section class="setup-panel ds-section-card wide-panel" data-admin-panel="menu" data-menu-panel="theme">
             <div class="panel-title">
               <div>
                 <p class="eyebrow">Template system</p>
@@ -487,7 +688,7 @@
             </form>
           </section>
 
-          <section class="setup-panel wide-panel">
+          <section class="setup-panel ds-section-card wide-panel" data-admin-panel="menu" data-menu-panel="add">
             <div class="panel-title">
               <div>
                 <p class="eyebrow">Restaurant admin</p>
@@ -506,7 +707,7 @@
               </label>
               <label class="field">
                 <span>Price</span>
-                <input id="dishPrice" required min="0" step="0.1" type="number" placeholder="18.80" />
+                <input id="dishPrice" required min="0" step="0.01" type="number" inputmode="decimal" placeholder="18.80" />
               </label>
               <label class="field">
                 <span>Tags</span>
@@ -536,7 +737,7 @@
             </form>
           </section>
 
-          <section class="setup-panel wide-panel">
+          <section class="setup-panel ds-section-card wide-panel" data-admin-panel="menu" data-menu-panel="import">
             <div class="panel-title">
               <div>
                 <p class="eyebrow">CSV / spreadsheet import</p>
@@ -565,17 +766,60 @@
       </section>
     </main>
 
-    <button class="mobile-cart-dock hidden" id="mobileCartDock" type="button" aria-label="Open cart">
-      <span><b id="mobileCartCount">0</b> items</span>
-      <strong id="mobileCartTotal">$0.00</strong>
-      <span>View cart</span>
+    <button class="mobile-cart-dock floating-cart hidden" id="mobileCartDock" type="button" aria-label="Open cart">
+      <span class="mobile-cart-details">
+        <span class="mobile-cart-summary"><b id="mobileCartCount">0</b> <span id="mobileCartLabel">items</span></span>
+        <strong id="mobileCartTotal">$0.00</strong>
+      </span>
+      <span id="mobileCartAction">View cart</span>
     </button>
-    <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Customer navigation">
-      <button type="button" data-mobile-nav="home">Home</button>
+    <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Mobile navigation">
       <button type="button" data-mobile-nav="menu">Menu</button>
       <button type="button" data-mobile-nav="orders">Orders</button>
       <button type="button" data-mobile-nav="account">Account</button>
     </nav>
+
+    <div class="modal-backdrop hidden shared-clock-modal" id="sharedClockModal" role="dialog" aria-modal="true" aria-labelledby="sharedClockTitle">
+      <section class="shared-clock-shell" id="sharedClockShell">
+        <button class="shared-clock-close" id="closeSharedClock" type="button" aria-label="Close staff clock">×</button>
+        <div class="shared-clock-brand">AVENIQ</div>
+        <p class="eyebrow">Shared device</p>
+        <h2 id="sharedClockTitle">Staff Clock</h2>
+        <div id="sharedClockContent"></div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop hidden" id="attendancePinModal" role="dialog" aria-modal="true" aria-labelledby="attendancePinTitle">
+      <section class="attendance-pin-modal">
+        <div class="panel-title">
+          <div>
+            <p class="eyebrow">Staff attendance</p>
+            <h2 id="attendancePinTitle">Set Attendance PIN</h2>
+            <p class="muted" id="attendancePinStaff"></p>
+          </div>
+          <button class="icon-button" id="closeAttendancePin" type="button" aria-label="Close attendance PIN dialog">×</button>
+          </div>
+        <form class="auth-form" id="attendancePinForm" novalidate>
+          <label class="field"><span>New 4-digit PIN</span><input id="attendancePinValue" type="password" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" aria-describedby="attendancePinHelp" /></label>
+          <label class="field"><span>Confirm PIN</span><input id="attendancePinConfirm" type="password" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" /></label>
+          <p class="muted" id="attendancePinHelp">Only the staff member needs this code. It cannot be viewed again after saving.</p>
+          <p class="auth-error hidden" id="attendancePinError" role="alert"></p>
+          <div class="form-actions">
+            <button class="ghost-button" id="generateAttendancePin" type="button">Generate PIN</button>
+            <button class="submit-button" id="saveAttendancePin" type="submit">Save PIN</button>
+          </div>
+        </form>
+        <div class="attendance-pin-reveal hidden" id="attendancePinReveal" aria-live="polite">
+          <p class="eyebrow">Record this now</p>
+          <strong id="attendancePinRevealValue"></strong>
+          <p>This PIN will not be shown again.</p>
+          <button class="submit-button" id="doneAttendancePin" type="button">Done</button>
+        </div>
+      </section>
+    </div>
+    <div class="modal-backdrop hidden" id="attendanceReportDetailModal" role="dialog" aria-modal="true" aria-labelledby="attendanceReportDetailTitle">
+      <section class="attendance-report-detail-modal"><div class="modal-header"><div><p class="eyebrow">Attendance report</p><h2 id="attendanceReportDetailTitle">Shift details</h2></div><button class="icon-button" id="closeAttendanceReportDetail" type="button" aria-label="Close shift details">×</button></div><div id="attendanceReportDetailContent"></div></section>
+    </div>
 
     <div class="modal-backdrop hidden" id="optionModal" role="dialog" aria-modal="true" aria-labelledby="optionTitle">
       <section class="option-modal">
@@ -596,6 +840,14 @@
           <button class="ghost-button" id="cancelOptions" type="button">Cancel</button>
         </div>
       </section>
+    </div>
+
+    <div class="modal-backdrop hidden" id="paymentModal" role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle">
+      <section class="payment-modal" id="paymentModalContent"></section>
+    </div>
+
+    <div class="modal-backdrop hidden" id="reviewOrderModal" role="dialog" aria-modal="true" aria-labelledby="reviewOrderTitle">
+      <section class="review-order-modal" id="reviewOrderContent" tabindex="-1"></section>
     </div>
 
     <div class="modal-backdrop hidden" id="staffAuthModal" role="dialog" aria-modal="true" aria-labelledby="staffAuthTitle">
@@ -631,7 +883,8 @@
 
     <script src="/mobile-shell.js?v=20260703-1"></script>
     <script src="/supabase-config.js?v=20260703-1"></script>
-    <script src="/supabase-client.js?v=20260716-1"></script>
-    <script src="/app.js?v=20260716-2"></script>
+    <script src="/supabase-client.js?v=20260723-staff-status"></script>
+    <script src="/vendor/qrcode.js?v=20260717-1"></script>
+    <script src="/app.js?v=20260812-ui-audit"></script>
   </body>
 </html>

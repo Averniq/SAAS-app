@@ -1,11 +1,17 @@
-const SHELL_CACHE = "aveniq-shell-v15";
-const RUNTIME_CACHE = "aveniq-runtime-v15";
+const SHELL_CACHE = "aveniq-shell-v34";
+const RUNTIME_CACHE = "aveniq-runtime-v34";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
-  "/styles.css?v=20260716-2",
-  "/app.js?v=20260716-2"
+  "/styles.css?v=20260812-ui-audit",
+  "/app.js?v=20260812-ui-audit",
+  "/mobile-shell.js?v=20260703-1",
+  "/supabase-config.js?v=20260703-1",
+  "/supabase-client.js?v=20260723-staff-status",
+  "/vendor/qrcode.js?v=20260717-1",
+  "/assets/brand/aveniq-leaf-logo-reverse.png"
+  ,"/offline.html"
 ];
 
 self.addEventListener("install", (event) => {
@@ -52,7 +58,7 @@ async function networkFirst(request) {
     if (response.ok) await cache.put(request, response.clone());
     return response;
   } catch {
-    return (await cache.match(request)) || (await caches.match("/index.html"));
+    return (await cache.match(request)) || (await caches.match("/offline.html"));
   }
 }
 

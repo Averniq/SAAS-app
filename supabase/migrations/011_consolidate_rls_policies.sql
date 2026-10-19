@@ -7,6 +7,7 @@
 -- owner/manager and platform-admin UPDATE paths.
 drop policy if exists "staff read own restaurants" on public.restaurants;
 drop policy if exists "platform admins read restaurants" on public.restaurants;
+drop policy if exists "authenticated read allowed restaurants" on public.restaurants;
 create policy "authenticated read allowed restaurants" on public.restaurants
 for select to authenticated
 using (
@@ -16,6 +17,7 @@ using (
 
 drop policy if exists "owners manage restaurant" on public.restaurants;
 drop policy if exists "platform admins update restaurants" on public.restaurants;
+drop policy if exists "authenticated update allowed restaurants" on public.restaurants;
 create policy "authenticated update allowed restaurants" on public.restaurants
 for update to authenticated
 using (
@@ -31,6 +33,10 @@ with check (
 -- can manage staff in their restaurant.
 drop policy if exists "staff read own memberships" on public.restaurant_staff;
 drop policy if exists "owners manage staff" on public.restaurant_staff;
+drop policy if exists "staff read allowed memberships" on public.restaurant_staff;
+drop policy if exists "owners insert staff" on public.restaurant_staff;
+drop policy if exists "owners update staff" on public.restaurant_staff;
+drop policy if exists "owners delete staff" on public.restaurant_staff;
 create policy "staff read allowed memberships" on public.restaurant_staff
 for select to authenticated
 using (
@@ -54,6 +60,9 @@ using (public.has_restaurant_role(restaurant_id, array['owner']));
 -- Categories: staff SELECT already includes owners/managers, so split write
 -- access out of the previous ALL policy.
 drop policy if exists "owners manage categories" on public.categories;
+drop policy if exists "owners insert categories" on public.categories;
+drop policy if exists "owners update categories" on public.categories;
+drop policy if exists "owners delete categories" on public.categories;
 create policy "owners insert categories" on public.categories
 for insert to authenticated
 with check (public.has_restaurant_role(restaurant_id, array['owner','manager']));
@@ -69,6 +78,9 @@ using (public.has_restaurant_role(restaurant_id, array['owner','manager']));
 
 -- Tables.
 drop policy if exists "owners manage tables" on public.tables;
+drop policy if exists "owners insert tables" on public.tables;
+drop policy if exists "owners update tables" on public.tables;
+drop policy if exists "owners delete tables" on public.tables;
 create policy "owners insert tables" on public.tables
 for insert to authenticated
 with check (public.has_restaurant_role(restaurant_id, array['owner','manager']));
@@ -84,6 +96,9 @@ using (public.has_restaurant_role(restaurant_id, array['owner','manager']));
 
 -- Menu items.
 drop policy if exists "owners manage menu" on public.menu_items;
+drop policy if exists "owners insert menu" on public.menu_items;
+drop policy if exists "owners update menu" on public.menu_items;
+drop policy if exists "owners delete menu" on public.menu_items;
 create policy "owners insert menu" on public.menu_items
 for insert to authenticated
 with check (public.has_restaurant_role(restaurant_id, array['owner','manager']));

@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .netlify/
+.netlify-preview/
+.pnpm-store/
 .supabase/
 supabase/.temp/
 preview-server*.log
@@ -8,3 +10,7 @@ preview-server*.log
 .env
 .env.*
 !.env.example
+
+.superpowers/
+.tools/
+.kitchen-local/
