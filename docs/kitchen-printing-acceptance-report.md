@@ -14,6 +14,10 @@ Date: 2026-10-20 Australia/Sydney. Local development only. Production release NO
 
 The approved11 tasks have software implementations and available validation; Task10 physical tablet/printer acceptance remains explicitly open under the user's hardware-unavailability ruling. A Draft PR is review delivery, not release approval. Real Sake Street hardware sign-off and separate approval are required before Production Ready.
 
+## Draft PR integration limitation
+
+[Draft PR17](https://github.com/Averniq/SAAS-app/pull/17) is open against main. GitHub reports CONFLICTING. Current main contains independent staff-management, authentication/routing, payment/public-client and build-boundary changes beyond the approved source baseline. Local implementation and all evidence above apply to the preserved baseline plus printing changes, **not to an integrated current-main build**. No merge/rebase or replacement of those independent changes was performed. The Draft PR is reviewable by its feature-versus-c255bb8 range, but is not mergeable. Reconciliation with current main and a new integrated regression pass remain outstanding integration work. This is additional to physical acceptance; do not interpret local software completion as main-branch integration completion.
+
 ## Approved task accounting
 
 | Task | Software result / evidence |
