@@ -18,12 +18,12 @@ Authorization: local development only; no production database access, hosted mig
 | --- | --- | --- |
 | Unit: candidate workspace | PASS | `node --test tests/kitchen-printing/candidate-workspace.test.mjs`: 7/7; existing destination retention, hosted/linked rejection, occupied/duplicate ports, root containment, directory junction rejection, explicit append/hash and omitted-file exclusion |
 | Frozen migration integrity | PASS | `node scripts/test-migration-integrity.mjs` |
-| Local Supabase replay | RUNNING | Pinned CLI 2.121.0; PostgreSQL 15.19.0.004 image; no feature SQL applied yet |
+| Local Supabase replay | PASS with pinned prior environment | CLI 2.114.0 / PostgreSQL 15.8.1.085; all 22 migrations applied unchanged; migration count and authenticated-only ACL verified. CLI 2.121.0 / PG 15.19.0.004 failed migration 19 prestate guard; retained as environment incompatibility evidence. |
 | Local Supabase feature/RLS/HTTP/concurrency | NOT RUN | Tasks 2–4 pending baseline gate |
 | Android JVM/build | NOT RUN | Verified Temurin 21.0.12.1+1 and Android command-line tools 15859902; SDK packages provisioning |
 | Android emulator + simulator | NOT RUN | Native implementation pending |
-| Real Sake Street tablet + simulator | BLOCKED | Hardware availability unconfirmed |
-| Physical IVIDA S300H paper/cut/readability | BLOCKED | No physical hardware verification performed |
+| Real Sake Street tablet + simulator | PENDING — PHYSICAL HARDWARE REQUIRED | User confirmed tablet unavailable, USB debugging not authorized |
+| Physical IVIDA S300H paper/cut/readability | PENDING — PHYSICAL HARDWARE REQUIRED | User confirmed printer is at restaurant, inaccessible, unknown IP; no LAN access/scanning authorized |
 
 ## Task 1 review and corrections
 
@@ -36,3 +36,4 @@ Independent source review found current client reads of `restaurants.venue_statu
 The existing copy build omits `offline.html` while the service worker precaches it; address when changing native packaging.
 
 No paper-out detection, printing success, restart recovery, tenant/device security or end-to-end workflow claim has yet been made. TCP completion will mean only sent to printer, with paper unconfirmed. Uncertain attempts must never automatically replay. Printing failures must remain visible in Kitchen and cannot change order/payment state.
+
