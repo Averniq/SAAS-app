@@ -47,7 +47,14 @@ select public.set_kitchen_print_control('32000000-0000-0000-0000-000000000001',f
 do $$begin begin perform public.claim_kitchen_print_job('kp-dispatch'); raise exception 'LEGACY_ALLOWED'; exception when others then if sqlerrm<>'PRINT_PROTOCOL_UPGRADE_REQUIRED' then raise; end if; end; end$$;
 select public.set_kitchen_print_control('32000000-0000-0000-0000-000000000001',true,false);
 select pg_temp.assert_true((select count(*)=2 from public.kitchen_print_jobs where restaurant_id='32000000-0000-0000-0000-000000000001'),'reenable does not backfill');
+-- The only bridge for pre-cutover orders is a deliberately confirmed audited reprint.
+insert into public.orders(id,restaurant_id,table_id,created_at) values('34000000-0000-0000-0000-000000000005','32000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000001',clock_timestamp()-interval '1 day');
+insert into public.order_items(restaurant_id,order_id,item_name,quantity,price,name_snapshot) values('32000000-0000-0000-0000-000000000001','34000000-0000-0000-0000-000000000005','Old synthetic ticket',1,2,'Old synthetic ticket');
+select public.request_legacy_kitchen_reprint('34000000-0000-0000-0000-000000000005',(:'printer'::jsonb->>'id')::uuid,'Paper inspected; deliberate legacy reprint','37000000-0000-0000-0000-000000000001',true) as legacy_child \gset
+select pg_temp.assert_true(public.request_legacy_kitchen_reprint('34000000-0000-0000-0000-000000000005',(:'printer'::jsonb->>'id')::uuid,'Paper inspected; deliberate legacy reprint','37000000-0000-0000-0000-000000000001',true)=:'legacy_child'::uuid,'legacy replay stable');
+select pg_temp.assert_true((select snapshot->>'sourceProtocol'='legacy_v1' and kind='reprint' from public.kitchen_print_jobs where id=:'legacy_child'),'legacy marker');
 rollback;
+
 
 
 

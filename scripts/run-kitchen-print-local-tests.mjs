@@ -24,6 +24,15 @@ const suite = args[args.indexOf('--suite') + 1];
 const suites = { access: ['access', 'config'], dispatch: ['dispatch', 'compatibility'], delivery: ['delivery', 'history'], concurrency: ['concurrency'], acceptance: ['acceptance'] };
 if (!suites[suite]) throw new Error('Unknown local suite');
 if (suite === 'concurrency') {
+  const orderTenant=randomUUID(), table=randomUUID();
+  docker(['exec','-i',container,'psql','-U','postgres','-d','postgres','-X','-v','ON_ERROR_STOP=1'],`insert into public.restaurants(id,name,slug) values('${orderTenant}','Synthetic order locking','kp-lock-${orderTenant}'); insert into public.tables(id,restaurant_id,table_name,name,local_id,table_token) values('${table}','${orderTenant}','T','T','t','${randomUUID()}');`);
+  const commits=await Promise.all([1,2].map(()=>new Promise(resolve=>{
+    const child=spawn('docker',['exec','-i',container,'psql','-U','postgres','-d','postgres','-X','-qAt','-v','ON_ERROR_STOP=1'],{windowsHide:true});
+    let err='';child.stderr.on('data',v=>err+=v);child.on('close',code=>resolve({code,err}));
+    child.stdin.end(`begin; set local statement_timeout='10s'; insert into public.orders(restaurant_id,table_id) values('${orderTenant}','${table}'); select pg_sleep(1); commit;`);
+  })));
+  if(commits.some(result=>result.code!==0)) throw new Error('Concurrent order commits failed: '+commits.map(result=>result.err).join('\n'));
+  console.log('PASS two concurrent order commits with printing disabled');
   const tenant = randomUUID(), operator = randomUUID(), printer = randomUUID();
   const devices = Array.from({ length: 20 }, () => randomUUID());
   const setup = `begin; insert into auth.users(id) values('${operator}'); insert into public.restaurants(id,name,slug) values('${tenant}','Synthetic concurrency','kp-concurrency-${tenant}'); insert into public.restaurant_staff(restaurant_id,user_id,role) values('${tenant}','${operator}','kitchen'); insert into public.kitchen_printers(id,restaurant_id,name,ip,updated_by) values('${printer}','${tenant}','Concurrency','192.168.3.60','${operator}'); ${devices.map(id => `insert into public.kitchen_print_devices(id,restaurant_id,operator_id,device_name,secret_hash,last_heartbeat) values('${id}','${tenant}','${operator}','Synthetic concurrency tablet',encode(extensions.digest(repeat('e',64),'sha256'),'hex'),clock_timestamp()); insert into public.kitchen_print_device_printers values('${tenant}','${id}','${printer}');`).join(' ')} select set_config('request.jwt.claims','{"sub":"${operator}","role":"authenticated"}',true); select public.request_kitchen_test_print('${printer}',gen_random_uuid()) from generate_series(1,20); commit;`;
@@ -47,4 +56,5 @@ for (const name of suites[suite]) {
   process.stdout.write(docker(['exec', '-i', container, 'psql', '-U', 'postgres', '-d', 'postgres', '-X', '-v', 'ON_ERROR_STOP=1'], sql));
 }
 console.log(`PASS local ${suite}; isolated project ${marker.projectId}`);
+
 
