@@ -1,0 +1,41 @@
+{
+  "localOnly": true,
+  "project": "aveniq-kitchen-cli2114-a153d2",
+  "physicalHardware": "PENDING",
+  "productionRelease": "NOT AUTHORIZED",
+  "scenarios": [
+    {
+      "scenario": "lost-begin-response",
+      "status": "PASS",
+      "emulator": "emulator-5554",
+      "osForceStop": true,
+      "serverState": "uncertain",
+      "ticketConnections": 0,
+      "totalTcpConnections": 2,
+      "reachabilityProbeConnections": 2,
+      "immutableAttemptEvents": 2,
+      "payload": null,
+      "captureHash": null,
+      "paperConfirmed": false
+    },
+    {
+      "scenario": "lost-finish-response",
+      "status": "PASS",
+      "emulator": "emulator-5554",
+      "osForceStop": true,
+      "serverState": "transmitted",
+      "ticketConnections": 1,
+      "totalTcpConnections": 3,
+      "reachabilityProbeConnections": 2,
+      "immutableAttemptEvents": 2,
+      "payload": {
+        "cuts": 2,
+        "initializations": 2,
+        "rasterLines": 2,
+        "bytes": 5224
+      },
+      "captureHash": "a0371657e607856ea351e250e8ff70d23c2f8617bf3c276f80067223bc78ffa1",
+      "paperConfirmed": false
+    }
+  ]
+}
