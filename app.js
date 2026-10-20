@@ -1939,7 +1939,7 @@ function selectAdminMenuSection(menu, { updateUrl = true } = {}) {
 }
 
 function selectAdminSection(section, { menu = "status", updateUrl = true } = {}) {
-  const available = new Set(["overview", "menu", "restaurant", "team", "tables"]);
+  const available = new Set(["overview", "menu", "restaurant", "team", "tables", "printers"]);
   const selected = available.has(section) ? section : "overview";
   document.querySelectorAll("[data-admin-section]").forEach((button) => {
     const active = button.dataset.adminSection === selected;
@@ -6332,3 +6332,5 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Backspace") { event.preventDefault(); clockKey("back"); }
   if (event.key === "Escape") closeSharedClock();
 });
+
+window.getKitchenPrintContext = () => ({ staff: staffUser, activeView });

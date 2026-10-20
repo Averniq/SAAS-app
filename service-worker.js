@@ -1,11 +1,11 @@
-const SHELL_CACHE = "aveniq-shell-v34";
-const RUNTIME_CACHE = "aveniq-runtime-v34";
+const SHELL_CACHE = "aveniq-shell-v35";
+const RUNTIME_CACHE = "aveniq-runtime-v35";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
-  "/styles.css?v=20260812-ui-audit",
-  "/app.js?v=20260812-ui-audit",
+  "/styles.css?v=20261020-kitchen-print",
+  "/app.js?v=20261020-kitchen-print",
   "/mobile-shell.js?v=20260703-1",
   "/supabase-config.js?v=20260703-1",
   "/supabase-client.js?v=20260723-staff-status",

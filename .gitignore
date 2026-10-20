@@ -18,3 +18,4 @@ android/local.properties
 android/.gradle/
 android/**/build/
 
+android/app/src/main/assets/kitchen-backend.json
