@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 3,
+  "status": "reconciliation-blocked",
+  "inventoryKind": "frozen-historical-reconciliation-evidence",
+  "canonicalTreatment": "noncanonical; see supabase/catalog-manifest.json for the separately approved 18-migration chain",
+  "notes": "Every current repository SQL blob is frozen by SHA-256 as audit evidence; this is not proof that a blob was deployed. This register must never be used as a replay or deployment list. See docs/supabase-migration-reconciliation.md.",
+  "migrations": [
+    { "filename": "001_initial_schema.sql", "immutableSha256": "516c883ac75bd806cf6dbe22a50f811df0d9d49c28149459cbf344ab41d36fa8" },
+    { "filename": "002_platform_admin.sql", "immutableSha256": "3d46078eaafecf7144603671ed6a6e6a4bb479cc962e7c5192edf1a2a1146dea" },
+    { "filename": "003_restaurant_staff_invites.sql", "immutableSha256": "0ef8efc03a8ffcc68ab5a750aa4d7d8513081430617d2d1bc43866227c55240d" },
+    { "filename": "004_role_hardening.sql", "immutableSha256": "4e187f41c38d9bef1419c4fb8849e65b86b6e77782f12ed5cf261a052c7b27ad" },
+    { "filename": "005_all_round_staff.sql", "immutableSha256": "acec1d91b1ad6f232b64863fc0dd458cf3cb96b6f7e39a3d9a298faad97f3fe0" },
+    { "filename": "006_function_permission_hardening.sql", "immutableSha256": "00236c27084a9a48d3fe8ea483268c4e0b2f1e8ef63209ebd4f9b2d249638803" },
+    { "filename": "007_explicit_data_api_grants.sql", "immutableSha256": "aff6ad54b657888a2ca5582478209805ab86ff113b0b030cd280041845c13b4c" },
+    { "filename": "008_authoritative_option_pricing.sql", "immutableSha256": "695e60406d54bdca547a75497ba8ce81100269d10e5e0b16fdaafa9c3a974321" },
+    { "filename": "009_reporting_layer.sql", "immutableSha256": "e2b0637e600933aecdaefe009486a035b9134b04d8929bfeaee9ee14de795d27" },
+    { "filename": "010_advisor_index_rls_tuning.sql", "immutableSha256": "6d39a195dac68c579c923c0aa4f57517276e9ff3c261ef26be5580890bf1479c" },
+    { "filename": "011_consolidate_rls_policies.sql", "immutableSha256": "45415f2c9f9762965a5254e902a77daca22a37dd3599f02ba1d803d891587cb1" },
+    { "filename": "012_self_service_signup_validation.sql", "immutableSha256": "e1b08cd721ea3a34a4a850d2608aa4aa129b2ec9f32149e8450b6d44475086fe" },
+    { "filename": "013_verified_self_service_provisioning.sql", "immutableSha256": "ee4631be5bd19edf8c55a8223cd2043876470c6d61b09ac0e95d9ffe3a3afdd9" },
+    { "filename": "014_payment_records.sql", "immutableSha256": "69fbefaa75d0d5ae1c0a954872a72dfd2b90ebc3f3505224dcc74abed5efc918" },
+    { "filename": "015_organization_restaurant_integrity.sql", "immutableSha256": "c1a55e398441c6145ac133574c0057db2fc2490a11bb3534a8bd9b402739da16" },
+    { "filename": "016_seed_sake_street_test_tenant.sql", "immutableSha256": "13343b6d5a2f6f8cbaf05a100b9a9d8cedc96883f48d0b3980fa76c363565c80" },
+    { "filename": "017_seed_sake_street_categories.sql", "immutableSha256": "fbb7027cdb6c03fb1f5d085b2b1d20d53855ad8d16196445f7383bd9c306fd9b" },
+    { "filename": "018_record_restaurant_order_payment.sql", "immutableSha256": "c134a858d2a2635bb1e9d283f531addf0c7a8a31af9b8c7aead4a16dc301d25a" },
+    { "filename": "019_trial_entitlement_foundation.sql", "immutableSha256": "8d183dd0369868e4764c424053b0cfbe5adacec0dbb872f249b856caa729665b" },
+    { "filename": "020_self_service_onboarding_workflow.sql", "immutableSha256": "78ddc17b0e33b9fbfc754898718e757df96ed48909e1b0d1a293793fda4ef69f" },
+    { "filename": "021_sample_qr_test_order_activation.sql", "immutableSha256": "a3d0a0b68afd766aaf2a488489872088b73a8e6cf688ae95d80d46b072baa90d" },
+    { "filename": "022_exclude_test_orders_from_reporting.sql", "immutableSha256": "7cd7f463fc6ad8eb09d871ba48a3f72a03c484ff3f32689c79456875729bc24b" },
+    { "filename": "022_staff_presence.sql", "immutableSha256": "0c3eca85e37b1ec0199d2ed49188794c74130693e12d451caa2cb29cc55e477b" },
+    { "filename": "023_fix_staff_invite_entitlement_trigger.sql", "immutableSha256": "6394f9e4c1156dbae230844de97d3427bd83e1367c5bbdb3d05ea7d0b4a26a5c" },
+    { "filename": "024_harden_entitlement_trigger_permissions.sql", "immutableSha256": "d0b6f1af9950abaf1ef66386303020998fc713072d9508268948b88c2efaa1ba" },
+    { "filename": "025_menu_image_uploads.sql", "immutableSha256": "674d35ae4311e15ca4cbd64d6648e729a525b7939bfc5508175fbd2c4d205618" },
+    { "filename": "026_frontdesk_split_bills.sql", "immutableSha256": "4726cebab10105e4a3aff4974bf007b9f7bd6c4cee69d5a9aa97ed9e5489da52" },
+    { "filename": "027_staff_attendance.sql", "immutableSha256": "ab0c4929f3f17ebab6de4c211e27eebe0130c40ab27abcebba2489baa4c90d1f" },
+    { "filename": "028_shared_pin_attendance.sql", "immutableSha256": "feeb3b942ceb21547f24526991e1e5f73899de66d5546f789f6d53309852c731" },
+    { "filename": "029_harden_shared_pin_attendance.sql", "immutableSha256": "9312c60f4b6aac6b0b231190dfd8f8e8ac6dc86435002290d73d66f3ae8cfc3a" },
+    { "filename": "030_shared_pin_rate_limit.sql", "immutableSha256": "77b5399bb071096b129d942521c26a1b6f3d61d274b5631a0a56cfad0e917c94" },
+    { "filename": "031_qualify_pgcrypto_attendance.sql", "immutableSha256": "15760f44eedc3e1ccaafe30f61311d22d1834a20d109b592411fca504a08eda5" },
+    { "filename": "032_fix_pin_rate_limit_window_column.sql", "immutableSha256": "cbbd189546217bba9a67b7c6d47e422b8d1807620f469fd85f4f9d733b337de1" },
+    { "filename": "033_staff_attendance_pin_management.sql", "immutableSha256": "6f57c8671b75637d4efb1dd996f50ca885fd376709b23dfa9de2601301bc6769" },
+    { "filename": "034_attendance_weekly_reports.sql", "immutableSha256": "265f1a966373bee6be843c465767d72b08a2261098dfc3157a4e3f02d183d76d" },
+    { "filename": "035_order_integrity_audit.sql", "immutableSha256": "7401bceab0ee177f652eb3ec62e39b8009774f57b4d0e269f85ed26de0b68ad7" },
+    { "filename": "037_owner_boundary_and_payment_integrity.sql", "immutableSha256": "c2a5883050a2826c393d1d611c5cda397e85e7a5d22aea042048b3630d28e656" },
+    { "filename": "038_security_hardening.sql", "immutableSha256": "358e0b4d01dfc25845e841586c48495c5edfeb2986a28bbf009800795d434643" },
+    { "filename": "039_payment_confirmation_metadata.sql", "immutableSha256": "7fe27a82518c9bc28dfc759278aa1d056b3317fa3fc8fd660086e1f7111be79f" },
+    { "filename": "040_external_staff_clock_links.sql", "immutableSha256": "c0235e8cc709354d9da1e8d3c86d9d9cc3d6ba758948b56cecfef436e02a2cfd" },
+    { "filename": "041_self_service_trial_recovery_and_limits.sql", "immutableSha256": "dd4aaae2385910df53b6decc5d618bfc720da3fad026fdb6f67b7f4ff605573b" },
+    { "filename": "042_harden_atomic_kitchen_voids.sql", "immutableSha256": "b246f8263612868151b498db1dfb3e36179e31a7cb06be4d231afb4a66639225" },
+    { "filename": "043_public_qr_order_idempotency.sql", "immutableSha256": "e76349052a4606083426cd6f34a44f1efee04d36a533bbcdd4b1e270c573cba8" },
+    { "filename": "20260805133843_validate_onboarding_timezone.sql", "immutableSha256": "b8220bbeeeccab849ab55d5437a42de56da034ae4875887512af7ffc6986f62a" }
+  ],
+  "preservedAnomalies": {
+    "mutatedHistorical011": {
+      "filename": "011_consolidate_rls_policies.sql",
+      "immutableEvidenceSha256": "45415f2c9f9762965a5254e902a77daca22a37dd3599f02ba1d803d891587cb1",
+      "observedWorkingTreeSha256": "dd5b31380b158888eb04718bf7f96c1b1f070f1362c2b6973ba8c3d2e32e4646",
+      "canonicalTreatment": "excluded",
+      "provenance": "unresolved"
+    },
+    "duplicateLegacy022": [
+      {
+        "identity": "reporting-test-order-exclusion",
+        "filename": "022_exclude_test_orders_from_reporting.sql",
+        "effect": "reporting.order_facts excludes test orders",
+        "canonicalTreatment": "excluded",
+        "provenance": "unresolved"
+      },
+      {
+        "identity": "restaurant-staff-presence",
+        "filename": "022_staff_presence.sql",
+        "effect": "restaurant_staff presence fields and touch behavior",
+        "canonicalTreatment": "excluded",
+        "provenance": "unresolved"
+      }
+    ],
+    "laterUntrackedSql": {
+      "entryCount": 28,
+      "canonicalTreatment": "excluded",
+      "provenance": "unresolved"
+    }
+  }
+}

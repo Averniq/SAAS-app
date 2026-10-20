@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "status": "reconciliation-blocked",
+  "purpose": "Template only. Do not promote this file or copy it to catalog-manifest.json without read-only catalog captures from local, staging, and hosted environments.",
+  "requiredSections": [
+    "tables", "columns", "constraints", "indexes", "views", "materializedViews",
+    "triggers", "functions", "functionSecurity", "functionSearchPaths", "functionExecuteAcls",
+    "relationGrants", "rls", "rlsPolicies", "extensions", "storagePolicies"
+  ],
+  "requiredApplicationSurfaces": ["qr-ordering", "payments", "attendance", "onboarding", "reporting"],
+  "requiredAssertions": [
+    "public.get_public_tenant_context(text) signature and definition provenance",
+    "all SECURITY DEFINER functions have reviewed search paths and EXECUTE ACLs",
+    "RLS enabled/forced state and policies match the reviewed catalog",
+    "both former version-022 effects are present"
+  ]
+}

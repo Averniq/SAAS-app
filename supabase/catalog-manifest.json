@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "status": "approved-local-canonical-chain",
+  "manifestKind": "p0-01d-group-5-release-control",
+  "canonicalSourceCommit": "38cd1f3f4d2285953e7a5ebbf6e69ff91caf310c",
+  "hashAlgorithm": "sha256-normalized-lf-utf8",
+  "canonicalChain": [
+    { "order": 1, "version": "001", "filename": "001_initial_schema.sql", "sha256": "516c883ac75bd806cf6dbe22a50f811df0d9d49c28149459cbf344ab41d36fa8", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 2, "version": "002", "filename": "002_platform_admin.sql", "sha256": "3d46078eaafecf7144603671ed6a6e6a4bb479cc962e7c5192edf1a2a1146dea", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 3, "version": "003", "filename": "003_restaurant_staff_invites.sql", "sha256": "0ef8efc03a8ffcc68ab5a750aa4d7d8513081430617d2d1bc43866227c55240d", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 4, "version": "004", "filename": "004_role_hardening.sql", "sha256": "4e187f41c38d9bef1419c4fb8849e65b86b6e77782f12ed5cf261a052c7b27ad", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 5, "version": "005", "filename": "005_all_round_staff.sql", "sha256": "acec1d91b1ad6f232b64863fc0dd458cf3cb96b6f7e39a3d9a298faad97f3fe0", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 6, "version": "006", "filename": "006_function_permission_hardening.sql", "sha256": "00236c27084a9a48d3fe8ea483268c4e0b2f1e8ef63209ebd4f9b2d249638803", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 7, "version": "007", "filename": "007_explicit_data_api_grants.sql", "sha256": "aff6ad54b657888a2ca5582478209805ab86ff113b0b030cd280041845c13b4c", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 8, "version": "008", "filename": "008_authoritative_option_pricing.sql", "sha256": "695e60406d54bdca547a75497ba8ce81100269d10e5e0b16fdaafa9c3a974321", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 9, "version": "009", "filename": "009_reporting_layer.sql", "sha256": "e2b0637e600933aecdaefe009486a035b9134b04d8929bfeaee9ee14de795d27", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 10, "version": "010", "filename": "010_advisor_index_rls_tuning.sql", "sha256": "6d39a195dac68c579c923c0aa4f57517276e9ff3c261ef26be5580890bf1479c", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 11, "version": "014", "filename": "014_payment_records.sql", "sha256": "69fbefaa75d0d5ae1c0a954872a72dfd2b90ebc3f3505224dcc74abed5efc918", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 12, "version": "016", "filename": "016_seed_sake_street_test_tenant.sql", "sha256": "13343b6d5a2f6f8cbaf05a100b9a9d8cedc96883f48d0b3980fa76c363565c80", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 13, "version": "017", "filename": "017_seed_sake_street_categories.sql", "sha256": "fbb7027cdb6c03fb1f5d085b2b1d20d53855ad8d16196445f7383bd9c306fd9b", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 14, "version": "018", "filename": "018_record_restaurant_order_payment.sql", "sha256": "c134a858d2a2635bb1e9d283f531addf0c7a8a31af9b8c7aead4a16dc301d25a", "approvalStatus": "approved", "provenance": "approved-baseline-replay" },
+    { "order": 15, "version": "20260816150000", "filename": "20260816150000_reconcile_role_rls_acl_contract.sql", "sha256": "c82482e2f06dc7630e184609399bd2148d9103add489667ad9f3cb1d7b2d74ae", "approvalStatus": "approved", "provenance": "p0-01d-batch14-group1-forward" },
+    { "order": 16, "version": "20260816150100", "filename": "20260816150100_repair_targeted_security_definer_paths.sql", "sha256": "0eacd529912329a44763ba86efff7ff8506525b2ca819eb77428f4c6cd755021", "approvalStatus": "approved", "provenance": "p0-01d-batch14-group2-forward" },
+    { "order": 17, "version": "20260816150200", "filename": "20260816150200_repair_kitchen_print_contract.sql", "sha256": "f391442af105ac84d36e9a61579e99ff4cd281aa95d2250170735ecaabddb883", "approvalStatus": "approved", "provenance": "p0-01d-batch14-group3-forward" },
+    { "order": 18, "version": "20260817055036", "filename": "20260817055036_kitchen_print_claim_fencing_and_restaurant_policy_convergence.sql", "sha256": "27efd5b9ec5b1fdc91fcd1bb2f7dfeae9090a2a3fa86b061195e6f6bb91292f8", "approvalStatus": "approved", "provenance": "p0-01d-batch15a-forward" },
+    { "order": 19, "version": "20260817081037", "filename": "20260817081037_p0_02_batch2a_authenticated_definer_search_path_hardening.sql", "sha256": "51bdcb3e3ef2d64bdbcec988455cf0b3df5584b430997e8911aeb616e46eeea0", "approvalStatus": "approved", "provenance": "p0-02-batch2a-forward" },
+    { "order": 20, "version": "20260817085228", "filename": "20260817085228_p0_02_batch2b_public_qr_definer_search_path_hardening.sql", "sha256": "3e4a185edef8ea507a969a0c752109c15badab212692adcbd83b05a8ce2c640f", "approvalStatus": "approved", "provenance": "p0-02-batch2b-forward" },
+    { "order": 21, "version": "20260817100000", "filename": "20260817100000_p0_03_authoritative_payment_operations.sql", "sha256": "57fa7ac3465b5778dc66a93d8a2e51f3769d5e0691eb19a63d4f4d2aa7afb5a0", "approvalStatus": "approved", "provenance": "p0-03-gates1-3-forward" },
+    { "order": 22, "version": "20260817110000", "filename": "20260817110000_p0_04_public_qr_ordering_boundary.sql", "sha256": "4110fa49d4075717bb83e56230ed6504e0c24f15302b305f7da5f5d33dd8636a", "approvalStatus": "approved", "provenance": "p0-04-gates1-6-forward" }
+  ],
+  "historicalEvidence": {
+    "inventoryPath": "supabase/migration-inventory.json",
+    "treatment": "frozen-noncanonical-evidence",
+    "mutated011": { "filename": "011_consolidate_rls_policies.sql", "canonicalTreatment": "excluded", "knownImmutableSha256": "45415f2c9f9762965a5254e902a77daca22a37dd3599f02ba1d803d891587cb1", "observedWorkingTreeSha256": "dd5b31380b158888eb04718bf7f96c1b1f070f1362c2b6973ba8c3d2e32e4646", "provenance": "unresolved" },
+    "duplicate022": [
+      { "identity": "reporting-test-order-exclusion", "filename": "022_exclude_test_orders_from_reporting.sql", "effect": "reporting.order_facts excludes test orders", "canonicalTreatment": "excluded", "provenance": "unresolved" },
+      { "identity": "restaurant-staff-presence", "filename": "022_staff_presence.sql", "effect": "restaurant_staff presence fields and touch behavior", "canonicalTreatment": "excluded", "provenance": "unresolved" }
+    ],
+    "laterUntrackedSql": { "canonicalTreatment": "excluded", "provenance": "unresolved", "inventoryEntryCount": 28 }
+  },
+  "deploymentRule": "Only a workspace materialized from canonicalChain is deployable. The repository-wide supabase/migrations directory is evidence-bearing and must never be replayed or pushed directly."
+}

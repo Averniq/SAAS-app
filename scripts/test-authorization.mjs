@@ -157,6 +157,21 @@ async function probeOrderAction(token, restaurantId, action) {
   });
 }
 
+async function probePaymentAction(token, restaurantId) {
+  return apiRequest("rpc/record_authoritative_payment", {
+    method: "POST",
+    token,
+    body: {
+      p_restaurant_id: restaurantId,
+      p_order_id: ZERO_UUID,
+      p_amount_cents: 1,
+      p_method: "Cash",
+      p_note: "Authorization probe",
+      p_idempotency_key: ZERO_UUID
+    }
+  });
+}
+
 async function runCrossTenantReads(label, token, ownRestaurantId) {
   if (!otherRestaurantId) {
     skip(`${label}: cross-restaurant isolation`, "set AVENIQ_OTHER_RESTAURANT_ID");
@@ -274,9 +289,9 @@ async function runRoleAccount(account) {
   );
 
   const preparing = await probeOrderAction(token, restaurantId, "Preparing");
-  const paid = await probeOrderAction(token, restaurantId, "Paid");
+  const payment = await probePaymentAction(token, restaurantId);
   const canUseKitchen = ["owner", "manager", "staff", "kitchen"].includes(account.expectedRole);
-  const canUseFrontDesk = ["owner", "manager", "staff", "cashier"].includes(account.expectedRole);
+  const canUseFrontDesk = ["owner", "manager", "cashier"].includes(account.expectedRole);
 
   expect(
     `${account.label}: kitchen action boundary`,
@@ -285,8 +300,8 @@ async function runRoleAccount(account) {
   );
   expect(
     `${account.label}: front-desk action boundary`,
-    paid.status === 400 && new RegExp(canUseFrontDesk ? "ORDER_NOT_FOUND" : "CASHIER_ROLE_REQUIRED").test(messageOf(paid)),
-    `received ${paid.status} ${messageOf(paid)}`
+    payment.status === 400 && new RegExp(canUseFrontDesk ? "ORDER_NOT_FOUND" : "CASHIER_ROLE_REQUIRED").test(messageOf(payment)),
+    `received ${payment.status} ${messageOf(payment)}`
   );
 
   await runCrossTenantReads(account.label, token, restaurantId);

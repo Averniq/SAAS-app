@@ -4,12 +4,13 @@
   "short_name": "Aveniq",
   "description": "Multi-restaurant QR ordering by Aveniq.",
   "lang": "en-AU",
-  "start_url": "/?source=pwa",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#181513",
   "theme_color": "#181513",
   "categories": ["food", "business"],
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "icons": [{"src":"/assets/brand/aveniq-leaf-logo-reverse.png","type":"image/png","purpose":"any"}]
 }

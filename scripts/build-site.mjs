@@ -14,7 +14,7 @@ const publicFiles = [
   "supabase-client.js",
   "supabase-config.js"
 ];
-const publicFolders = [];
+const publicFolders = ["icons", "assets"];
 
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
@@ -24,5 +24,10 @@ await Promise.all(
     cp(resolve(root, folder), resolve(output, folder), { recursive: true, force: true })
   )
 );
+await mkdir(resolve(output, "vendor"), { recursive: true });
+await cp(
+  resolve(root, "node_modules", "qrcode-generator", "qrcode.js"),
+  resolve(output, "vendor", "qrcode.js")
+);
 
-console.log(`Built ${publicFiles.length} public files and ${publicFolders.length} public folders in ${output}`);
+console.log(`Built ${publicFiles.length} public files, ${publicFolders.length} public folders and 1 QR vendor file in ${output}`);
