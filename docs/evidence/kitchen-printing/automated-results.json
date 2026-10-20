@@ -1,0 +1,131 @@
+{
+  "date": "2026-10-20",
+  "environment": "isolated local synthetic fixtures only",
+  "software": "implemented, broader app acceptance incomplete",
+  "production": "NOT AUTHORIZED",
+  "physicalHardware": "PENDING",
+  "js": {
+    "tests": 11,
+    "failures": 0,
+    "skipped": 0
+  },
+  "sql": {
+    "suites": 3,
+    "result": "PASS",
+    "canonicalFrozenFiles": 22,
+    "candidatesApplied": 7,
+    "freshReplayCandidates": 6,
+    "subsequentCleanupCandidate": 7
+  },
+  "http": {
+    "result": "PASS",
+    "concurrentQrRequests": 10,
+    "concurrentClaims": 20,
+    "devices": 2
+  },
+  "android": {
+    "emulator": "aveniq-kitchen-p0 API36 Google APIs x86_64",
+    "instrumentation": {
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "jvm": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "build": "PASS",
+    "lint": "PASS",
+    "apkSha256": "56174b3a2c87d722999d05c5bf63f22644d328e9b362006fcca97865eed59ff3",
+    "gradle": "8.14.3",
+    "jdk": "21.0.12.1+1",
+    "minimumSdk": 24,
+    "testedRuntimeSdk": 36,
+    "transport": "TCP transmitted, paper not confirmed"
+  },
+  "regression": [
+    {
+      "name": "JS printing suites",
+      "result": "PASS"
+    },
+    {
+      "name": "scripts/test-migration-integrity.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "scripts/test-mobile-pwa.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "scripts/test-app-shell-startup.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-kitchen-void-contract.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-order-integrity.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-critical-business-rules.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-critical-server-guards.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-public-qr-order-reliability.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-p0-04-public-qr-ordering.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-p0-03-payment-ledger.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-review-order.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-uat-regressions.mjs",
+      "result": "FAIL"
+    },
+    {
+      "name": "syntax:contracts.js",
+      "result": "PASS"
+    },
+    {
+      "name": "syntax:native-agent.js",
+      "result": "PASS"
+    },
+    {
+      "name": "syntax:printer-settings.js",
+      "result": "PASS"
+    },
+    {
+      "name": "syntax:printer-status.js",
+      "result": "PASS"
+    },
+    {
+      "name": "syntax:ticket-model.js",
+      "result": "PASS"
+    }
+  ],
+  "notExecuted": [
+    "Full-app E2E: canonical schema differs from existing app",
+    "Actual tablet / physical S300H",
+    "True OS force-stop or power-cycle during transmission",
+    "Deterministic delayed begin / lost ACK fault injector",
+    "API24 runtime",
+    "Physical paper-out / cover / cut / glyph quality / sleep tests"
+  ]
+}

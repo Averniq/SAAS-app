@@ -28,11 +28,16 @@
     "test:critical-business-rules": "node ./tests/test-critical-business-rules.mjs && node ./tests/test-critical-server-guards.mjs",
     "serve": "node ./scripts/serve.mjs",
     "watch:css": "tailwindcss -i ./src/tailwind.css -o ./styles.css --watch",
-    "mobile:sync": "pnpm run build && cap sync",
+    "mobile:sync": "pnpm run build:kitchen:android && cap sync android",
     "mobile:add:android": "cap add android",
     "mobile:add:ios": "cap add ios",
-    "mobile:android": "pnpm run build && cap sync android && cap open android",
-    "mobile:ios": "pnpm run build && cap sync ios && cap open ios"
+    "mobile:android": "pnpm run build:kitchen:android && cap sync android && cap open android",
+    "mobile:ios": "pnpm run build && cap sync ios && cap open ios",
+    "test:kitchen-print": "node --test tests/kitchen-printing/*.test.mjs",
+    "test:kitchen-print:local": "node scripts/run-kitchen-print-local-tests.mjs --suite acceptance --local",
+    "test:kitchen-print:http": "node scripts/test-kitchen-print-http.mjs",
+    "kitchen:simulator": "node scripts/escpos-printer-simulator.mjs",
+    "build:kitchen:android": "pnpm run build && node scripts/build-kitchen-android.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.1",
