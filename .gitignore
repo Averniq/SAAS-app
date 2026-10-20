@@ -8,3 +8,11 @@ preview-server*.log
 .env
 .env.*
 !.env.example
+.superpowers/
+.tools/
+.local-print/
+.pnpm-store/
+android/local.properties
+android/.gradle/
+android/**/build/
+android/app/src/main/assets/kitchen-backend.json

@@ -1,0 +1,39 @@
+{
+  "sourceCommit": "1182d3f71cb7b919cba7d577d740dd0398e1345d",
+  "sources": [
+    {
+      "filename": "20261020062224_kitchen_printers_and_devices.sql",
+      "sha256": "453d9a44383ff29e2f0aa1909d5400a58097ee4cecebef20f838c822d35b80eb"
+    },
+    {
+      "filename": "20261020062652_kitchen_print_queue_v2.sql",
+      "sha256": "f7a8689499b57287db728ca8d5be3277dc56e3e119bea4408ca3c520d3ed542b"
+    },
+    {
+      "filename": "20261020062859_kitchen_print_delivery_protocol.sql",
+      "sha256": "063e6c3d82aba19b3a85441991f1a65e9534079921215ff715b67928ece3b1d1"
+    },
+    {
+      "filename": "20261020063746_kitchen_print_endpoint_and_revision_guards.sql",
+      "sha256": "16516a081548bc5f3da364f146e582d308e66b9bdaa6ecb32f210515698da38d"
+    },
+    {
+      "filename": "20261020064725_kitchen_print_bounded_status_and_lock_order.sql",
+      "sha256": "472847a91ed33afcc8141bcf0cf695f7898337070a277e76dbe051d173f2712d"
+    },
+    {
+      "filename": "20261020070008_kitchen_print_operational_status_bounds.sql",
+      "sha256": "e3c2baa5d0d41687768f6df9067461100ead6a326570227e0beb9be305f3601c"
+    },
+    {
+      "filename": "20261020071621_kitchen_print_lint_contracts.sql",
+      "sha256": "231019b2aebacda21c448869db278d2f91e68d8db745116cb62996bbe72d2fd8"
+    }
+  ],
+  "adaptations": [
+    "one atomic new candidate",
+    "conditional legacy renames; unavailable old consumer stays denied",
+    "optional legacy claim markers and optional test-order flag via to_jsonb",
+    "main24 migrations unchanged"
+  ]
+}

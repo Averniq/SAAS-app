@@ -1,0 +1,121 @@
+{
+  "status": "mainline-source-baseline",
+  "sourceCommit": "8d0a6c1b6925630389aed145f5f46bd595a22613",
+  "canonicalChain": [
+    {
+      "filename": "001_initial_schema.sql",
+      "sha256": "516c883ac75bd806cf6dbe22a50f811df0d9d49c28149459cbf344ab41d36fa8"
+    },
+    {
+      "filename": "002_platform_admin.sql",
+      "sha256": "3d46078eaafecf7144603671ed6a6e6a4bb479cc962e7c5192edf1a2a1146dea"
+    },
+    {
+      "filename": "003_restaurant_staff_invites.sql",
+      "sha256": "0ef8efc03a8ffcc68ab5a750aa4d7d8513081430617d2d1bc43866227c55240d"
+    },
+    {
+      "filename": "004_role_hardening.sql",
+      "sha256": "4e187f41c38d9bef1419c4fb8849e65b86b6e77782f12ed5cf261a052c7b27ad"
+    },
+    {
+      "filename": "005_all_round_staff.sql",
+      "sha256": "bc583b379800a0ba77f238fc40c60c2de8b712530989b94f94736c25db0e1a83"
+    },
+    {
+      "filename": "006_function_permission_hardening.sql",
+      "sha256": "00236c27084a9a48d3fe8ea483268c4e0b2f1e8ef63209ebd4f9b2d249638803"
+    },
+    {
+      "filename": "007_explicit_data_api_grants.sql",
+      "sha256": "aff6ad54b657888a2ca5582478209805ab86ff113b0b030cd280041845c13b4c"
+    },
+    {
+      "filename": "008_authoritative_option_pricing.sql",
+      "sha256": "695e60406d54bdca547a75497ba8ce81100269d10e5e0b16fdaafa9c3a974321"
+    },
+    {
+      "filename": "009_reporting_layer.sql",
+      "sha256": "e2b0637e600933aecdaefe009486a035b9134b04d8929bfeaee9ee14de795d27"
+    },
+    {
+      "filename": "010_advisor_index_rls_tuning.sql",
+      "sha256": "6d39a195dac68c579c923c0aa4f57517276e9ff3c261ef26be5580890bf1479c"
+    },
+    {
+      "filename": "011_consolidate_rls_policies.sql",
+      "sha256": "45415f2c9f9762965a5254e902a77daca22a37dd3599f02ba1d803d891587cb1"
+    },
+    {
+      "filename": "014_payment_records.sql",
+      "sha256": "69fbefaa75d0d5ae1c0a954872a72dfd2b90ebc3f3505224dcc74abed5efc918"
+    },
+    {
+      "filename": "016_seed_sake_street_test_tenant.sql",
+      "sha256": "13343b6d5a2f6f8cbaf05a100b9a9d8cedc96883f48d0b3980fa76c363565c80"
+    },
+    {
+      "filename": "017_seed_sake_street_categories.sql",
+      "sha256": "fbb7027cdb6c03fb1f5d085b2b1d20d53855ad8d16196445f7383bd9c306fd9b"
+    },
+    {
+      "filename": "018_record_restaurant_order_payment.sql",
+      "sha256": "f6d7611ccda68ef860152157ab2a7a3570014e92122d8a059047199e788ba2b0"
+    },
+    {
+      "filename": "021_set_sake_street_brand_assets.sql",
+      "sha256": "cad59dbfea6ef99d7159b05d38800dfda6ef405ecee7a60c2ce1e66073c581a9"
+    },
+    {
+      "filename": "022_seed_full_sake_street_menu.sql",
+      "sha256": "82e7a026869c985d16a2d076366f035970f0e26642af15a05fd26881cf4ba1e0"
+    },
+    {
+      "filename": "023_complete_sake_street_menu_categories.sql",
+      "sha256": "c87a783e5839263132fa7371eb26e7c35dfb99f9cb5f63029a3a0dd4f72bb194"
+    },
+    {
+      "filename": "024_finalize_sake_street_brand_assets.sql",
+      "sha256": "1825417469d3cc832beb62a1269467e0fd034ea8863694d6967eb555ef4806e7"
+    },
+    {
+      "filename": "20261001115919_canonical_public_qr.sql",
+      "sha256": "a32ddc0eaadd5940b4a5e4cfc10eee80e6b4af9247a831ce0d128579f3539b82"
+    },
+    {
+      "filename": "20261001115923_payment_membership_fail_closed.sql",
+      "sha256": "47cc88b30e92cb55f77b8b08a9da1226a2e3cf2a8babdb444119a8f822f14c59"
+    },
+    {
+      "filename": "20261003090000_initial_owner_bootstrap_claim.sql",
+      "sha256": "5ed6432320200f0a944f613052eabe1c7e3b53239a26bde9f4d5fbd2c013dd91"
+    },
+    {
+      "filename": "20261018044445_staff_management.sql",
+      "sha256": "2837353e3cf13548837fa1239ecd8fc5359de84d9c2970290774e2bb4682c9f0"
+    },
+    {
+      "filename": "20261018092519_staff_invitation_transport_boundary.sql",
+      "sha256": "ebb1a0124294b18155a9a2f8386fc5e12ce4e3f99738e0136db83c2275fee093"
+    }
+  ],
+  "protectedFiles": {
+    "app.js": "a6c6c1d24b9f0eaccf949cfc05e851a4cb12552f20cc5d8c2fd9b8b7fcb2e1e1",
+    "supabase-client.js": "82f162691b712449634d4c26a72e0894676488d10db720f6346299be53cc3569",
+    "scripts/build-site.mjs": "0b0108cf32d5d2343ac8ab1e7e54769c2e681c403cf24412934d7052356c410d",
+    "scripts/supabase-origin.mjs": "f23a7ee62c35c60f1a22d3514cffe9d6916cabb01c9b0253533a6ecfcac8f92a",
+    "src/recovery-auth.js": "c8050bae8338c0db2f2552c67f24589e9e520ce73fae2e5e62f2b740654d05c4",
+    "supabase/functions/staff-invite/index.ts": "e36bbd13551c22205b3c137d2ae1251b1b3801546a285cbbb888ab8d483d92fc",
+    "supabase/functions/staff-invite/handler.mjs": "e0a57a2db00c83d2ce9e4f72cb6a1c40eb33026a17c546e128b81c9bfc9755ab",
+    "netlify.toml": "cecaa7619afc2b63cd1a396eff8980c1b0209e1395cb0828efc5bce046fe9865",
+    "pnpm-lock.yaml": "7aecaa72ff4b73bd4bf8038dfd96cff1f0db3a0aedb8db7e7275169439fcb236",
+    "manifest.webmanifest": "87136477de375464d5190e68209c7c2d123acfdca39f491cffbd361b51d62c2a"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/ios": "^8.4.1",
+    "@supabase/auth-js": "2.99.1",
+    "qrcode-generator": "1.4.4"
+  }
+}

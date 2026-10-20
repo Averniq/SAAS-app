@@ -5265,3 +5265,5 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden && staffUser) syncCloudOrders({ notify: false });
   if (!document.hidden && !staffUser) syncCustomerOrderStatuses();
 });
+
+window.getKitchenPrintContext = () => ({ staff: staffUser, activeView });

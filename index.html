@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest?v=20260911-1" />
     <link id="tenantFavicon" rel="icon" href="/assets/brand/sake-street-logo-mark.webp" type="image/webp" />
     <link id="tenantAppleTouchIcon" rel="apple-touch-icon" href="/assets/brand/sake-street-logo-mark.png" />
-    <link rel="stylesheet" href="/styles.css?v=20260911-1" />
+    <link rel="stylesheet" href="/styles.css?v=20261020-kitchen-mainline" />
   </head>
   <body>
     <section class="account-gateway hidden" id="accountGateway" aria-live="polite">
@@ -300,6 +300,7 @@
           </div>
         </div>
         <div class="kitchen-alert hidden" id="kitchenAlert" role="status" aria-live="polite"></div>
+        <aside id="kitchenPrintStatus" class="kp-banner" role="status" hidden><span data-print-message>Checking print agent…</span><button type="button">Printer tools</button></aside>
         <div class="order-board" id="kitchenBoard"></div>
       </section>
 
@@ -375,6 +376,8 @@
               <button class="ghost-button" id="loadCloudData" type="button">Load Cloud Data</button>
             </div>
           </section>
+
+          <section class="setup-panel wide-panel kp-panel" id="kitchenPrintersPanel" aria-label="Kitchen Printers"><div id="kitchenPrintersSettings"></div></section>
 
           <section class="setup-panel wide-panel team-panel" id="teamManagementPanel">
             <div class="panel-title">
@@ -700,6 +703,7 @@
     <script src="/vendor/recovery-auth.js?v=20261013-pkce"></script>
     <script src="/supabase-client.js?v=20260911-1"></script>
     <script src="/vendor/qrcode.js?v=20260911-1"></script>
-    <script src="/app.js?v=20260911-1"></script>
+    <script src="/app.js?v=20261020-kitchen-mainline"></script>
+  <script type="module" src="/src/kitchen-printing/native-agent.js"></script>
   </body>
 </html>

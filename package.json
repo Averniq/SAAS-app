@@ -9,10 +9,10 @@
     "test:authorization": "node ./scripts/test-authorization.mjs",
     "serve": "node ./scripts/serve.mjs",
     "watch:css": "tailwindcss -i ./src/tailwind.css -o ./styles.css --watch",
-    "mobile:sync": "pnpm run build && cap sync",
+    "mobile:sync": "pnpm run build:kitchen:android && cap sync android",
     "mobile:add:android": "cap add android",
     "mobile:add:ios": "cap add ios",
-    "mobile:android": "pnpm run build && cap sync android && cap open android",
+    "mobile:android": "pnpm run build:kitchen:android && cap sync android && cap open android",
     "mobile:ios": "pnpm run build && cap sync ios && cap open ios",
     "test:password-recovery": "node ./tests/test-password-recovery.mjs && node ./tests/test-recovery-resend.mjs && node ./tests/test-password-recovery-ui.mjs",
     "test:password-recovery:browser": "node ./tests/test-password-recovery-browser.mjs",
@@ -25,7 +25,12 @@
     "test:table-rename:local": "node ./tests/test-table-rename-local-runtime.mjs",
     "test:staff-management": "node ./tests/test-staff-management-client.mjs && node ./tests/test-staff-invite-endpoint.mjs",
     "test:staff-management:browser": "node ./tests/test-staff-management-browser.mjs",
-    "test:staff-management:local": "node ./tests/test-staff-management-local.mjs && node ./tests/test-staff-invite-local.mjs && node ./tests/test-staff-transport-boundary-local.mjs"
+    "test:staff-management:local": "node ./tests/test-staff-management-local.mjs && node ./tests/test-staff-invite-local.mjs && node ./tests/test-staff-transport-boundary-local.mjs",
+    "test:kitchen-print": "node --test tests/kitchen-printing/*.test.mjs",
+    "test:kitchen-print:local": "node scripts/run-kitchen-print-local-tests.mjs --suite acceptance --local",
+    "test:kitchen-print:http": "node scripts/test-kitchen-print-http.mjs",
+    "kitchen:simulator": "node scripts/escpos-printer-simulator.mjs",
+    "build:kitchen:android": "pnpm run build && node scripts/build-kitchen-android.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.1",

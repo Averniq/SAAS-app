@@ -176,6 +176,12 @@ async function startStack() {
     gatePhase = 'canonical-migration-replay';
     await sql(source);
   }
+  if (process.env.AVENIQ_KITCHEN_PRINT_CANDIDATES === '1') {
+    const candidates = (await readdir(join(root, 'supabase/kitchen-print-candidates'))).filter(file => /^\d{14}_[a-z0-9_]+\.sql$/.test(file)).sort();
+    assert.ok(candidates.length, 'Explicit printing gate requires candidate files');
+    for (const file of candidates) await sql(await readFile(join(root, 'supabase/kitchen-print-candidates', file), 'utf8'));
+    pass('explicit local printing candidate replay (' + candidates.length + ' candidates)');
+  }
   await sql("alter role authenticator password 'postgres'; alter role supabase_auth_admin password 'postgres';");
   pass(`fresh canonical replay (${migrations.length} migrations; initial-owner migration fault rollback verified)`);
   if (emailCapture) {
