@@ -1,0 +1,138 @@
+{
+  "date": "2026-10-20T11:56:23.035Z",
+  "base": "8d0a6c1b6925630389aed145f5f46bd595a22613",
+  "source": "1182d3f71cb7b919cba7d577d740dd0398e1345d",
+  "branch": "codex/kitchen-printing-mainline-20261020",
+  "historicalMigrations": 24,
+  "newUnpromotedCandidates": 1,
+  "unitAndUat": {
+    "passed": 15,
+    "failed": 0
+  },
+  "freshMainAuthHttpFinancialKitchen": {
+    "passedChecks": 36,
+    "printingSqlSuites": 3
+  },
+  "realBrowserApiNative": {
+    "result": "PASS",
+    "sameUiCreatedOrder": true,
+    "nativeAttemptCount": 1,
+    "uniqueAttemptIds": 1,
+    "tcpStreams": 1,
+    "captures": [
+      {
+        "bytes": 576,
+        "sha256": "66bced51218841ad0c4866164e0daef0cdda70ba7afd0b8f4a44fc6718610c9f"
+      }
+    ],
+    "state": "transmitted",
+    "paperOutput": "NOT CONFIRMED",
+    "unchangedOrderItemsAndPayments": true,
+    "standardApkSha256": "ce98895faff6ebf7f33fd486bfdc4af9110b5385c1c20e626288023c615f7689"
+  },
+  "android": {
+    "build": "PASS",
+    "lint": "PASS",
+    "api": 36,
+    "instrumentation": {
+      "tests": 7,
+      "printingSpecific": 6,
+      "generatedExample": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "jvm": {
+      "tests": 4,
+      "printingSpecific": 3,
+      "generatedExample": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "junit": [
+      {
+        "name": "NET-NEST",
+        "tests": "2",
+        "skipped": "0",
+        "failures": "0",
+        "errors": "0"
+      },
+      {
+        "name": "NET-NEST",
+        "tests": "1",
+        "skipped": "0",
+        "failures": "0",
+        "errors": "0"
+      },
+      {
+        "name": "NET-NEST",
+        "tests": "1",
+        "skipped": "0",
+        "failures": "0",
+        "errors": "0"
+      }
+    ]
+  },
+  "faultInjection": {
+    "passed": 7,
+    "realForceStopScenarios": 5,
+    "ackLoss": "real committed response dropped",
+    "claimConcurrency": "20 HTTP requests, 2 registered device credentials, 1 winner; not two physical workers",
+    "apkSha256": "e5c6aeff02c42f99f1c1064a9a16b6890272d670e6e41ea6d5292241019859e7"
+  },
+  "localRuntimeRegressions": [
+    {
+      "file": "tests/test-table-rename-local-runtime.mjs",
+      "result": "PASS",
+      "exitCode": 0,
+      "passedAssertions": 37
+    },
+    {
+      "file": "tests/test-staff-management-local.mjs",
+      "result": "PASS",
+      "exitCode": 0,
+      "passedAssertions": 75
+    },
+    {
+      "file": "tests/test-staff-invite-local.mjs",
+      "result": "PASS",
+      "exitCode": 0,
+      "passedAssertions": 56
+    },
+    {
+      "file": "tests/test-staff-transport-boundary-local.mjs",
+      "result": "PASS",
+      "exitCode": 0,
+      "passedAssertions": 52
+    }
+  ],
+  "mockBrowserRegressionSuites": 5,
+  "mockBrowserViewports": [
+    375,
+    768,
+    1280
+  ],
+  "buildConfigCredentialAndLeakChecks": "PASS",
+  "declarationTypecheck": "PASS TypeScript5.9.3 contracts.d.ts only",
+  "independentReviews": {
+    "qa": "No confirmed blocking defect",
+    "security": "No critical/high finding"
+  },
+  "privateLogSha256": {
+    "android-mainline-final.log": "f4948e7957078d418ae0509cd9e4ef2d6ec10a504612707c2cb9c553fcbb60ad",
+    "unit-uat-final.log": "6047e04a169c78b3de8b935110c71a4ec330299e722d2222baaed02a93d66b9e",
+    "mainline-compatibility-green.log": "fbba05e569cb4cc0ce0074611104e467f49c3fe58513d09f2a5737ec4d0b6a9e",
+    "build-config-final.log": "f2d29187dd91f73da18bfa0b5e6b42d1a2aed226ca9a37378c2542bad6f1b604",
+    "credential-safety-final.log": "0df935bc0e88d41751aa65ea886c13f9d5c846662672db6741440e0c583a3693",
+    "leak-scan-final.log": "6f55ecfecab90b7477e82cab8affbf6dd27987f30ba7975d2c21f95cd683fd9a",
+    "full-app-final.log": "8eb43cc8c6873e7d4b8ace08c6a5623420a8ae8289c9c66d404b9702e909fae0",
+    "native-final-assets.log": "89aaf7e0139ae8c58cc4830eb634bf6d7a6f664ce04fa1da697ea4a6729856e9"
+  },
+  "physicalHardware": "PENDING",
+  "paperOutput": "NOT CONFIRMED",
+  "productionAccess": "NONE",
+  "merge": "NOT PERFORMED",
+  "deployment": "NOT PERFORMED",
+  "hostedMigrations": "NOT APPLIED"
+}

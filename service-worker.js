@@ -1,16 +1,21 @@
-const APP_SHELL_CACHE = "aveniq-shell-v19";
-const RUNTIME_CACHE = "aveniq-runtime-v19";
+const APP_SHELL_CACHE = "aveniq-shell-v20";
+const RUNTIME_CACHE = "aveniq-runtime-v20";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/manifest.webmanifest?v=20260911-1",
-  "/styles.css?v=20260911-1",
+  "/styles.css?v=20261020-kitchen-mainline",
   "/mobile-shell.js?v=20260911-1",
   "/supabase-config.js?v=20260911-1",
   "/supabase-client.js?v=20260911-1",
   "/vendor/qrcode.js?v=20260911-1",
   "/vendor/recovery-auth.js?v=20261013-pkce",
-  "/app.js?v=20260911-1",
+  "/app.js?v=20261020-kitchen-mainline",
+  "/src/kitchen-printing/native-agent.js",
+  "/src/kitchen-printing/printer-settings.js",
+  "/src/kitchen-printing/printer-status.js",
+  "/src/kitchen-printing/ticket-model.js",
+  "/src/kitchen-printing/contracts.js",
   "/assets/brand/sake-street-logo-mark.png",
   "/assets/brand/sake-street-logo-round.webp",
   "/assets/brand/sake-street-logo-full.webp"

@@ -15,7 +15,7 @@ const publicFiles = [
   "service-worker.js",
   "supabase-client.js"
 ];
-const publicFolders = ["assets"];
+const publicFolders = ["assets", "src/kitchen-printing"];
 
 function configuredMode() {
   const explicit = String(process.env.AVENIQ_PUBLIC_CONFIG_MODE || "").trim().toLowerCase();

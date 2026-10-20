@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-20T11:48:41.111Z",
+  "backend": "isolated local Supabase main24 + mainline printing candidate",
+  "browser": "actual headless Chrome DOM/UI, real local Auth/REST, external HTTPS blocked",
+  "checks": [
+    "Real browser password login and complete mainline restaurant/menu/order load",
+    "Actual Admin printer settings Save backed by tenant RPC",
+    "Public QR Review → double Confirm & Send → one trusted order and one immutable print job",
+    "Actual Kitchen Display automatically receives the same cloud order",
+    "Front Desk retains the same new unpaid cloud order"
+  ],
+  "orderStatus": "new",
+  "paidAt": null,
+  "orderCount": 1,
+  "printJobCount": 1,
+  "printJobState": "queued",
+  "apiErrors": [],
+  "nativeDelivery": {
+    "result": "PASS",
+    "sameUiCreatedOrder": true,
+    "nativeAttemptCount": 1,
+    "uniqueAttemptIds": 1,
+    "tcpStreams": 1,
+    "captures": [
+      {
+        "bytes": 576,
+        "sha256": "66bced51218841ad0c4866164e0daef0cdda70ba7afd0b8f4a44fc6718610c9f"
+      }
+    ],
+    "state": "transmitted",
+    "paperOutput": "NOT CONFIRMED",
+    "unchangedOrderItemsAndPayments": true,
+    "standardApkSha256": "ce98895faff6ebf7f33fd486bfdc4af9110b5385c1c20e626288023c615f7689"
+  },
+  "physicalHardware": "PENDING",
+  "production": "NOT ACCESSED"
+}

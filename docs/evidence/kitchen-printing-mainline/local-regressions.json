@@ -1,0 +1,26 @@
+[
+  {
+    "file": "tests/test-table-rename-local-runtime.mjs",
+    "result": "PASS",
+    "exitCode": 0,
+    "passedAssertions": 37
+  },
+  {
+    "file": "tests/test-staff-management-local.mjs",
+    "result": "PASS",
+    "exitCode": 0,
+    "passedAssertions": 75
+  },
+  {
+    "file": "tests/test-staff-invite-local.mjs",
+    "result": "PASS",
+    "exitCode": 0,
+    "passedAssertions": 56
+  },
+  {
+    "file": "tests/test-staff-transport-boundary-local.mjs",
+    "result": "PASS",
+    "exitCode": 0,
+    "passedAssertions": 52
+  }
+]
