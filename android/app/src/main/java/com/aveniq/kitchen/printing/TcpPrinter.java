@@ -61,6 +61,15 @@ public final class TcpPrinter {
 
   public Result send(
       String ip, int port, byte[] bytes, java.util.function.BooleanSupplier allowed) {
+    return send(ip, port, bytes, allowed, FaultCheckpoint.NONE);
+  }
+
+  Result send(
+      String ip,
+      int port,
+      byte[] bytes,
+      java.util.function.BooleanSupplier allowed,
+      FaultCheckpoint checkpoint) {
     boolean writing = false;
     ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor();
     Socket socket = new Socket();
@@ -82,8 +91,15 @@ public final class TcpPrinter {
       socket.connect(new InetSocketAddress(ip, port), 3000);
       if (!allowed.getAsBoolean()) return new Result("not_sent", "PRINT_RUN_CANCELLED");
       writing = true;
-      socket.getOutputStream().write(bytes);
-      socket.getOutputStream().flush();
+      OutputStream out = socket.getOutputStream();
+      for (int offset = 0; offset < bytes.length; offset += 4096) {
+        if (!allowed.getAsBoolean())
+          return new Result("uncertain", "PRINT_RUN_CANCELLED_DURING_WRITE");
+        out.write(bytes, offset, Math.min(4096, bytes.length - offset));
+        checkpoint.reached("during_write");
+      }
+      out.flush();
+      checkpoint.reached("after_tcp_write");
       return new Result("transmitted", null);
     } catch (Exception e) {
       return new Result(

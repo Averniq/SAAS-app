@@ -19,6 +19,26 @@ public class PrintingInstrumentedTest {
   }
 
   @Test
+  public void releaseContextRejectsFaultInjection() throws Exception {
+    var actual = InstrumentationRegistry.getInstrumentation().getTargetContext();
+    var release =
+        new android.content.ContextWrapper(actual) {
+          @Override
+          public android.content.pm.ApplicationInfo getApplicationInfo() {
+            var info = new android.content.pm.ApplicationInfo(super.getApplicationInfo());
+            info.flags &= ~android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE;
+            return info;
+          }
+        };
+    try {
+      new PrintAgent(release, point -> {});
+      fail("Release context accepted fault injection");
+    } catch (SecurityException expected) {
+      assertEquals("DEBUG_FAULT_INJECTION_ONLY", expected.getMessage());
+    }
+  }
+
+  @Test
   public void encoderCopiesCutAndUnicode() throws Exception {
     byte[] data = EscPosEncoder.encode(snapshot());
     String text = new String(data, java.nio.charset.StandardCharsets.US_ASCII);

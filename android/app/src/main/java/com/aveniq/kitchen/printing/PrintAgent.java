@@ -12,6 +12,7 @@ public final class PrintAgent {
   private final DeviceStore store;
   private final AttemptJournal journal;
   private final TcpPrinter tcp;
+  private final FaultCheckpoint checkpoint;
   private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
   private volatile boolean enabled = false, foreground = true;
   private ScheduledFuture<?> future;
@@ -20,6 +21,14 @@ public final class PrintAgent {
   private boolean printersReachable = false, printerAttention = false;
 
   public PrintAgent(Context c) throws Exception {
+    this(c, FaultCheckpoint.NONE);
+  }
+
+  PrintAgent(Context c, FaultCheckpoint checkpoint) throws Exception {
+    if (checkpoint != FaultCheckpoint.NONE
+        && (c.getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) == 0)
+      throw new SecurityException("DEBUG_FAULT_INJECTION_ONLY");
+    this.checkpoint = checkpoint;
     api = new PrintApi(c);
     store = new DeviceStore(c);
     journal = new AttemptJournal(store);
@@ -154,7 +163,7 @@ public final class PrintAgent {
     }
   }
 
-  private void acknowledge(JSONObject device, JSONObject record) throws Exception {
+  private String acknowledge(JSONObject device, JSONObject record) throws Exception {
     JSONObject payload =
         auth(device)
             .put("p_job_id", record.getString("jobId"))
@@ -162,8 +171,32 @@ public final class PrintAgent {
             .put("p_attempt_id", record.getString("attemptId"))
             .put("p_outcome", record.optString("outcome", "uncertain"))
             .put("p_error_code", record.optString("errorCode", "APP_RESTART_OR_ACK_LOSS"));
-    api.rpc("finish_kitchen_print_attempt", payload);
+    JSONObject reply;
+    try {
+      reply = (JSONObject) api.rpc("finish_kitchen_print_attempt", payload);
+    } catch (Exception e) {
+      if (!"PRINT_OUTCOME_CONFLICT".equals(e.getMessage())
+          || !Arrays.asList("transmitted", "not_sent").contains(record.optString("outcome")))
+        throw e;
+      // A late completion may already be quarantined server-side. Reconcile only towards
+      // uncertainty: never retry output or weaken the server's immutable outcome.
+      record.put("outcome", "uncertain").put("errorCode", "LATE_ACK_QUARANTINED");
+      journal.write(record);
+      reply =
+          (JSONObject)
+              api.rpc(
+                  "finish_kitchen_print_attempt",
+                  payload
+                      .put("p_outcome", "uncertain")
+                      .put("p_error_code", "LATE_ACK_QUARANTINED"));
+    }
+    String reconciled = reply.getString("state");
+    if (!Arrays.asList("transmitted", "uncertain", "retry_wait", "failed").contains(reconciled))
+      throw new IllegalStateException("INVALID_ACK_STATE");
     journal.clear();
+    if ("uncertain".equals(reconciled))
+      set("Attention Required", "Delivery uncertain; check paper before resolving print history");
+    return reconciled;
   }
 
   public void tick() throws Exception {
@@ -265,12 +298,14 @@ public final class PrintAgent {
         sent = new TcpPrinter.Result("not_sent", "APP_NOT_FOREGROUND");
       else {
         set("Printing", "Sending ticket");
+        checkpoint.reached("before_connect");
         sent =
             tcp.send(
                 begin.getString("ip"),
                 begin.getInt("port"),
                 bytes,
-                () -> enabled && foreground && runGuard.isCurrent(run) && api.validSession());
+                () -> enabled && foreground && runGuard.isCurrent(run) && api.validSession(),
+                checkpoint);
       }
     } catch (Exception e) {
       sent = new TcpPrinter.Result("not_sent", "TICKET_VALIDATION_FAILED");
@@ -279,9 +314,14 @@ public final class PrintAgent {
         .put("outcome", sent.outcome)
         .put("errorCode", sent.error == null ? "TCP_TRANSMITTED" : sent.error);
     journal.write(record);
-    acknowledge(device, record);
+    checkpoint.reached("before_ack");
+    String reconciled = acknowledge(device, record);
     set(
-        sent.outcome.equals("transmitted") ? "Ready" : "Attention Required",
-        sent.outcome.equals("transmitted") ? "Sent to printer - paper not confirmed" : sent.error);
+        reconciled.equals("transmitted") ? "Ready" : "Attention Required",
+        reconciled.equals("transmitted")
+            ? "Sent to printer - paper not confirmed"
+            : reconciled.equals("uncertain")
+                ? "Delivery uncertain; check paper before resolving print history"
+                : sent.error);
   }
 }

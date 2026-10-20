@@ -47,3 +47,9 @@ Printing status is transport/agent evidence. “Sent to printer — paper not co
 The canonical22 database does not contain every unrelated schema/RPC expected by the current working app, including `provision_self_service_account` and `restaurants.venue_status`. Printer component QA uses the actual local API through an explicitly labeled harness; it does not prove full application login/navigation. The native agent executes against real local Auth/QR/queue endpoints independently. Reconcile and review the broader application baseline before authorizing a restaurant installation. No fake provisioning RPC was added to make UI tests pass.
 
 Physical tablet installation, trusted test-backend networking, restaurant LAN checks and printer IP entry remain PENDING.
+
+## Explicit process-death / acknowledgement fault suite
+
+Use the dedicated emulator and existing isolated local stack only. Run `node scripts/build-kitchen-android.mjs --fault-injection`, then `android\gradlew.bat -p android assembleDebug assembleDebugAndroidTest`, then `node scripts/run-kitchen-print-fault-tests.mjs --emulator emulator-5554`. The runner starts loopback TCP19130 and API proxy57635, creates private synthetic fixtures and intentionally force-stops the app at checkpoints. It never counts killed tests as passed; restarted instrumentation asserts recovery and no duplicate TCP output. It also waits31 seconds for a real lease to expire and drops actual HTTP finish responses. Do not run another emulator suite concurrently. Restore standard local configuration afterward with `node scripts/build-kitchen-android.mjs` and rebuild. Normal Gradle connected tests select normal classes; the destructive-to-test-process crash class runs only through this explicit host suite.
+
+See [pre-merge acceptance](kitchen-printing-premerge-acceptance.md) for current results and blocking prerequisites.

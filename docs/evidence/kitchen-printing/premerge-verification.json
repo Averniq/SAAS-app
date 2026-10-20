@@ -1,0 +1,117 @@
+{
+  "date": "2026-10-20T10:36:18.515Z",
+  "scope": "PR18 pre-merge local software acceptance",
+  "normalAndroid": {
+    "instrumentation": {
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "jvm": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "build": "PASS",
+    "lint": "PASS",
+    "standardLocalBackend": "http://10.0.2.2:57631",
+    "apkSha256": "0336699f6e8b96fbba1ec43b5473a1bab4656736b9a7d937b07b9d16dacad830"
+  },
+  "faultSuite": {
+    "scenarios": 7,
+    "intentionalProcessTerminations": 5,
+    "successfulRecoveryAndAckInstrumentationInvocations": 6,
+    "claimingDeviceCredentials": 2,
+    "concurrentClaims": 20,
+    "winningClaims": 1,
+    "result": "PASS",
+    "evidence": "fault-injection-results.json"
+  },
+  "fullApp": {
+    "login": "PASS with isolated existing prerequisite013",
+    "printerSettingsSaveAndList": "PASS",
+    "sendToKitchenAndDisplay": "BLOCKED by pre-existing schema/client contract",
+    "evidence": "fullapp-schema-results.json"
+  },
+  "regressions": [
+    {
+      "name": "JS printing suites",
+      "result": "PASS"
+    },
+    {
+      "name": "scripts/test-migration-integrity.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "scripts/test-mobile-pwa.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "scripts/test-app-shell-startup.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-kitchen-void-contract.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-order-integrity.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-critical-business-rules.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-critical-server-guards.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-public-qr-order-reliability.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-p0-04-public-qr-ordering.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-p0-03-payment-ledger.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-review-order.mjs",
+      "result": "PASS"
+    },
+    {
+      "name": "tests/test-uat-regressions.mjs",
+      "result": "FAIL"
+    },
+    {
+      "name": "syntax:contracts.js",
+      "result": "PASS"
+    },
+    {
+      "name": "syntax:native-agent.js",
+      "result": "PASS"
+    },
+    {
+      "name": "syntax:printer-settings.js",
+      "result": "PASS"
+    },
+    {
+      "name": "syntax:printer-status.js",
+      "result": "PASS"
+    },
+    {
+      "name": "syntax:ticket-model.js",
+      "result": "PASS"
+    }
+  ],
+  "mergeRecommendation": "DO NOT MERGE: prerequisite/main integration, full-app schema and UAT blockers",
+  "physicalHardware": "PENDING",
+  "production": "NOT ACCESSED",
+  "deployment": "NOT PERFORMED",
+  "merge": "NOT PERFORMED"
+}

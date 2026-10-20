@@ -1,5 +1,7 @@
 # Kitchen auto-printing acceptance report
 
+Latest follow-up: [PR18 pre-merge acceptance](kitchen-printing-premerge-acceptance.md), including actual process-death/lost-ACK tests and prerequisite merge blockers. The counts and unexecuted scenarios below describe the initial implementation run.
+
 Date: 2026-10-20. Branch: `codex/kitchen-auto-printing-20261020`.
 
 ## Actual delivery status

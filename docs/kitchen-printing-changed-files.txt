@@ -1,10 +1,11 @@
-Printing changes relative to prerequisite 1decbfc (the snapshot itself is separate):
+Printing changes relative to prerequisite1decbfc (snapshot itself is separate):
 .gitignore
 android/.gitignore
 android/app/.gitignore
 android/app/build.gradle
 android/app/capacitor.build.gradle
 android/app/proguard-rules.pro
+android/app/src/androidTest/java/com/aveniq/kitchen/printing/FaultInjectionInstrumentedTest.java
 android/app/src/androidTest/java/com/aveniq/kitchen/printing/PrintingInstrumentedTest.java
 android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java
 android/app/src/debug/AndroidManifest.xml
@@ -14,6 +15,7 @@ android/app/src/main/java/com/aveniq/kitchen/MainActivity.java
 android/app/src/main/java/com/aveniq/kitchen/printing/AttemptJournal.java
 android/app/src/main/java/com/aveniq/kitchen/printing/DeviceStore.java
 android/app/src/main/java/com/aveniq/kitchen/printing/EscPosEncoder.java
+android/app/src/main/java/com/aveniq/kitchen/printing/FaultCheckpoint.java
 android/app/src/main/java/com/aveniq/kitchen/printing/KitchenPrintPlugin.java
 android/app/src/main/java/com/aveniq/kitchen/printing/LanDestination.java
 android/app/src/main/java/com/aveniq/kitchen/printing/PrintAgent.java
@@ -70,13 +72,23 @@ android/variables.gradle
 app.js
 capacitor.config.json
 docs/evidence/kitchen-printing/automated-results.json
+docs/evidence/kitchen-printing/fault-injection-results.json
+docs/evidence/kitchen-printing/fullapp-kitchen-schema-blocker.png
+docs/evidence/kitchen-printing/fullapp-schema-results.json
+docs/evidence/kitchen-printing/fullapp-settings-schema-blocker.png
+docs/evidence/kitchen-printing/premerge-verification.json
 docs/evidence/kitchen-printing/ux-printer-desktop-fixed.png
 docs/evidence/kitchen-printing/ux-printer-mobile-history.png
 docs/evidence/kitchen-printing/ux-printer-mobile.png
 docs/evidence/kitchen-printing/ux-printer-tablet.png
 docs/kitchen-printing-acceptance-report.md
 docs/kitchen-printing-changed-files.txt
+docs/kitchen-printing-pr-dependencies.md
+docs/kitchen-printing-premerge-acceptance.md
+docs/kitchen-printing-qa-acceptance-review.md
 docs/kitchen-printing-rollback.md
+docs/kitchen-printing-schema-investigation.md
+docs/kitchen-printing-security-acceptance-review.md
 docs/kitchen-printing-setup.md
 docs/sake-street-kitchen-printer-checklist.md
 index.html
@@ -84,10 +96,13 @@ package.json
 scripts/build-kitchen-android.mjs
 scripts/build-site.mjs
 scripts/escpos-printer-simulator.mjs
+scripts/kitchen-print-fault-fixture.mjs
 scripts/materialize-kitchen-print-candidate.mjs
 scripts/replay-kitchen-print-candidates.mjs
+scripts/run-kitchen-print-fault-tests.mjs
 scripts/run-kitchen-print-local-tests.mjs
 scripts/serve-kitchen-printer-fixture.mjs
+scripts/test-kitchen-full-app-e2e.mjs
 scripts/test-kitchen-print-http.mjs
 scripts/test-mobile-pwa.mjs
 service-worker.js

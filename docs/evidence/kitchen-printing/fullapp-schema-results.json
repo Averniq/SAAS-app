@@ -1,0 +1,33 @@
+{
+  "postgres": {
+    "venue_status": "false",
+    "provision_rpc": "false",
+    "item_status": "false",
+    "legacy_restaurant_auth_execute": "false"
+  },
+  "fullapp_e2e2_20261020": {
+    "venue_status": "true",
+    "provision_rpc": "true",
+    "item_status": "false",
+    "legacy_restaurant_auth_execute": "false"
+  },
+  "http": {
+    "provision": {
+      "status": 200
+    },
+    "legacyRestaurant": {
+      "status": 403,
+      "code": "42501",
+      "message": "permission denied for function get_public_restaurant"
+    },
+    "printers": {
+      "status": 200
+    },
+    "orders": {
+      "status": 400,
+      "code": "42703",
+      "message": "column order_items_1.status does not exist"
+    }
+  },
+  "printerCount": 1
+}
